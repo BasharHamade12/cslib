@@ -4,8 +4,12 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Bashar Hamade
 -/
 
-import Cslib.Init
-import Cslib.CPS.DiscreteLinearTime.Basic
+module
+
+public import Cslib.Init
+public import Cslib.CPS.DiscreteLinearTime.Basic
+
+@[expose] public section
 
 universe u v
 
@@ -26,6 +30,10 @@ and the total reachable set (`totalReachableSet`).
 * `IsReachable`: Proposition that the system can reach any target state from the zero state.
 * `reachableSetInKSteps`: The set of states reachable in exactly `k` steps from zero.
 * `totalReachableSet`: The union of all reachable states over all time steps.
+
+## References
+http://www.dii.unimo.it/~zanasi/didattica/Teoria_dei_Sistemi/Luc_TDS_ING_2016_Reachability_and_Controllability.pdf
+https://www.cds.caltech.edu/~murray/books/AM08/pdf/fbs-public_24Jul2020.pdf
 -/
 
 /-- Reachability: For any target state x_f ∈ σ, there exists a positive integer k_f
@@ -42,5 +50,5 @@ def DiscreteLinearSystemState.reachableSetInKSteps
 
 
 /-- The total reachable set is the union of reachable sets over all possible time steps `k`. -/
-def DiscreteLinearSystemState.totalReachableSet  (sys : DiscreteLinearSystemState σ ι) : Set σ :=
+def DiscreteLinearSystemState.totalReachableSet (sys : DiscreteLinearSystemState σ ι) : Set σ :=
   ⋃ k : ℕ, reachableSetInKSteps sys k

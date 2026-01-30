@@ -3,11 +3,14 @@ Copyright (c) 2025 Bashar Hamade. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Bashar Hamade
 -/
+module
+public import Cslib.Init
+public import Cslib.Foundations.Semantics.LTS.Basic
+public import Cslib.Logics.HennessyMilnerLogic.Basic
+public import Cslib.Foundations.Semantics.GameSemantics.Basic
 
-import Cslib.Init
-import Cslib.Foundations.Semantics.LTS.Basic
-import Cslib.Logics.HennessyMilnerLogic.Basic
-import Cslib.Foundations.Semantics.GameSemantics.Basic
+@[expose] public section
+
 
 /-!
 # HML Games
@@ -317,12 +320,6 @@ theorem game_semantics_soundness (lts : LTS State Label) (p : State) (φ : Formu
         specialize ih p
         have h_sat_ψ := ih.mp h_def_ψ
         contradiction
-
-
-
-
-
-
 
 end HMLGame
 

@@ -1,6 +1,10 @@
+module
 
-import Cslib.Init
-import Cslib.Foundations.Semantics.LTS.Basic
+
+public import Cslib.Init
+public import Cslib.Foundations.Semantics.LTS.Basic
+@[expose] public section
+
 
 /-! # Hennessy–Milner Logic
 

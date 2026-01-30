@@ -4,26 +4,28 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Bashar Hamade
 -/
 
-import Cslib.Init
-import Mathlib.Analysis.Normed.Module.Basic
-import Mathlib.Analysis.Normed.Operator.ContinuousLinearMap
-import Mathlib.LinearAlgebra.Span.Basic
-import Mathlib.LinearAlgebra.FiniteDimensional.Defs
-import Mathlib.Data.Finset.Basic
-import Mathlib.Data.Complex.Basic
-import Mathlib.Order.CompleteLattice.Basic
-import Mathlib.Analysis.Complex.Order
-import Mathlib.Analysis.Normed.Field.Lemmas
-import Mathlib.Analysis.Normed.Field.Basic
-import Mathlib.Analysis.Complex.Exponential
-import Mathlib.Analysis.Normed.Group.Basic
-import Mathlib.Analysis.Normed.Module.RCLike.Real
-import Mathlib.Analysis.Normed.Algebra.Spectrum
-import Mathlib.Order.Basic
-import Mathlib.LinearAlgebra.Charpoly.Basic
-import Mathlib.LinearAlgebra.Matrix.Charpoly.LinearMap
+module
 
+public import Cslib.Init
+public import Mathlib.Analysis.Normed.Module.Basic
+public import Mathlib.Analysis.Normed.Operator.ContinuousLinearMap
+public import Mathlib.LinearAlgebra.Span.Basic
+public import Mathlib.LinearAlgebra.FiniteDimensional.Defs
+public import Mathlib.Data.Finset.Basic
+public import Mathlib.Data.Complex.Basic
+public import Mathlib.Order.CompleteLattice.Basic
+public import Mathlib.Analysis.Complex.Order
+public import Mathlib.Analysis.Normed.Field.Lemmas
+public import Mathlib.Analysis.Normed.Field.Basic
+public import Mathlib.Analysis.Complex.Exponential
+public import Mathlib.Analysis.Normed.Group.Basic
+public import Mathlib.Analysis.Normed.Module.RCLike.Real
+public import Mathlib.Analysis.Normed.Algebra.Spectrum
+public import Mathlib.Order.Basic
+public import Mathlib.LinearAlgebra.Charpoly.Basic
+public import Mathlib.LinearAlgebra.Matrix.Charpoly.LinearMap
 
+@[expose] public section
 
 open scoped ComplexOrder
 
@@ -49,7 +51,16 @@ the current state, input, and initial state.
 given an input sequence.
 * `DiscreteLinearSystemState.satisfies_state_equation`: Proposition stating that
 the sequence `x` satisfies the linear difference equation `x(k+1) = A x(k) + B u(k)`.
+
+
+## References
+
+https://en.wikipedia.org/wiki/State-space_representation
+https://www.cds.caltech.edu/~murray/books/AM08/pdf/fbs-public_24Jul2020.pdf
+
 -/
+
+
 
 variable {σ : Type u} {ι : Type v}
 variable [TopologicalSpace σ] [NormedAddCommGroup σ] [NormedSpace ℂ σ]

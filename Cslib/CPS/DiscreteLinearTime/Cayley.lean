@@ -4,35 +4,37 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors:Bashar Hamade
 -/
 
-import Cslib.Init
-import Mathlib.Analysis.Normed.Module.Basic
-import Mathlib.Analysis.Normed.Operator.ContinuousLinearMap
-import Mathlib.LinearAlgebra.Span.Basic
-import Mathlib.LinearAlgebra.FiniteDimensional.Defs
+module
 
-import Mathlib.Data.Finset.Basic
-import Mathlib.Data.Complex.Basic
-import Mathlib.Order.CompleteLattice.Basic
-import Mathlib.Analysis.Normed.Module.Basic
-import Mathlib.Data.Complex.Basic
-import Mathlib.Analysis.Complex.Order
-import Mathlib.Analysis.Normed.Field.Lemmas
-import Mathlib.Analysis.Normed.Field.Basic
-import Mathlib.Analysis.Complex.Exponential
+public import Cslib.Init
+public import Mathlib.Analysis.Normed.Module.Basic
+public import Mathlib.Analysis.Normed.Operator.ContinuousLinearMap
+public import Mathlib.LinearAlgebra.Span.Basic
+public import Mathlib.LinearAlgebra.FiniteDimensional.Defs
+public import Mathlib.Data.Finset.Basic
+public import Mathlib.Data.Complex.Basic
+public import Mathlib.Order.CompleteLattice.Basic
+public import Mathlib.Analysis.Normed.Module.Basic
+public import Mathlib.Data.Complex.Basic
+public import Mathlib.Analysis.Complex.Order
+public import Mathlib.Analysis.Normed.Field.Lemmas
+public import Mathlib.Analysis.Normed.Field.Basic
+public import Mathlib.Analysis.Complex.Exponential
 
-import Mathlib.Analysis.Normed.Group.Basic
-import Mathlib.Analysis.Normed.Module.RCLike.Real
+public import Mathlib.Analysis.Normed.Group.Basic
+public import Mathlib.Analysis.Normed.Module.RCLike.Real
 
-import Mathlib.Analysis.Normed.Operator.ContinuousLinearMap
-import Mathlib.Analysis.Complex.Order
-import Mathlib.Analysis.Normed.Algebra.Spectrum
-import Mathlib.Order.Basic
-import Mathlib.LinearAlgebra.Charpoly.Basic
-import Mathlib.LinearAlgebra.Matrix.Charpoly.LinearMap
-import Mathlib.Algebra.Algebra.Bilinear
+public import Mathlib.Analysis.Normed.Operator.ContinuousLinearMap
+public import Mathlib.Analysis.Complex.Order
+public import Mathlib.Analysis.Normed.Algebra.Spectrum
+public import Mathlib.Order.Basic
+public import Mathlib.LinearAlgebra.Charpoly.Basic
+
+public import Mathlib.LinearAlgebra.Matrix.Charpoly.LinearMap
+public import Mathlib.Algebra.Algebra.Bilinear
 
 
-
+@[expose] public section
 
 open scoped ComplexOrder
 
@@ -41,6 +43,11 @@ open scoped ComplexOrder
 # Cayley-Hamilton implications for Controllability
 
 Auxiliary results based on the Cayley-Hamilton theorem for proving controllability results.
+
+
+## References
+https://www.statslab.cam.ac.uk/~rrw1/oc/L08.pdf
+
 -/
 
 set_option linter.style.emptyLine false
@@ -86,7 +93,7 @@ lemma system_power_multiplication_flopped (a : σ →L[ℂ] σ) (k : ℕ) :
 
 
 /-- Commutativity helper: A (A^i B v) = A^(i+1) B v. -/
-lemma helper1 [FiniteDimensional ℂ σ]
+lemma state_power_comm [FiniteDimensional ℂ σ]
     (a : σ →L[ℂ] σ) (B : ι →L[ℂ] σ) (n : ℕ) (i : Fin n) (v : ι) :
     a.toLinearMap ((a ^ i.val) (B v)) = (a ^ (i.val + 1)) (B v) := by
 
@@ -96,14 +103,14 @@ lemma helper1 [FiniteDimensional ℂ σ]
 
 
 /-- The degree of the characteristic polynomial equals the dimension of the space. -/
-lemma helper2 [FiniteDimensional ℂ σ]
+lemma deg_eq_dim_of_space [FiniteDimensional ℂ σ]
     (a : σ →L[ℂ] σ) (n : ℕ) (h_dim : Module.finrank ℂ σ = n) :
     a.toLinearMap.charpoly.natDegree = n := by
   rw [← h_dim]
   exact LinearMap.charpoly_natDegree a.toLinearMap
 
 /-- By Cayley-Hamilton, A^n can be expressed as a linear combination of lower powers. -/
-lemma helper3 [FiniteDimensional ℂ σ]
+lemma state_repr_as_lower_powers [FiniteDimensional ℂ σ]
     (a : σ →L[ℂ] σ) (n : ℕ) (h_dim : Module.finrank ℂ σ = n) :
     ∃ (c : Fin n → ℂ), a.toLinearMap ^ n = ∑ j : Fin n, c j • (a.toLinearMap ^ j.val) := by
 
@@ -158,7 +165,7 @@ lemma controllabilityColumnSpace_invariant [FiniteDimensional ℂ σ]
 
   by_cases h : i.val + 1 < n
   · have : (a.toLinearMap ((a ^ i.val) (B v))) = (a ^ (i.val + 1)) (B v) := by
-      apply helper1 a B n i v
+      apply state_power_comm a B n i v
 
     rw [this]
     apply Submodule.subset_span
@@ -174,7 +181,7 @@ lemma controllabilityColumnSpace_invariant [FiniteDimensional ℂ σ]
 
 
     have deg_ch : a.toLinearMap.charpoly.natDegree = n := by
-      apply helper2 a  n h_dim
+      apply deg_eq_dim_of_space a  n h_dim
 
 
     have i_eq : i.val = n - 1 := by
@@ -188,7 +195,7 @@ lemma controllabilityColumnSpace_invariant [FiniteDimensional ℂ σ]
     have : ∃ (c : Fin n → ℂ), a.toLinearMap ^ n = ∑ j : Fin n, c j • (a.toLinearMap ^ j.val) := by
 
 
-      apply helper3 a  n h_dim
+      apply state_repr_as_lower_powers a  n h_dim
 
     obtain ⟨c, hc⟩ := this
 

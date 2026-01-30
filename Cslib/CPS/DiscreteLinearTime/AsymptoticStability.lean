@@ -1,20 +1,26 @@
-import Mathlib.Analysis.Normed.Group.Basic
-import Mathlib.Analysis.Normed.Module.RCLike.Real
-import Mathlib.Analysis.Normed.Operator.ContinuousLinearMap
-import Mathlib.Analysis.Complex.Order
-import Mathlib.Analysis.Normed.Algebra.Spectrum
-import Mathlib.Order.Basic
-import Mathlib.Analysis.Normed.Algebra.GelfandFormula
-import Cslib.Init
-import Cslib.CPS.DiscreteLinearTime.Basic
-import Cslib.CPS.DiscreteLinearTime.Cayley
-
 
 /-
 Copyright (c) 2026 Bashar Hamade. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Bashar Hamade
 -/
+
+module
+
+public import Cslib.Init
+
+
+public import Mathlib.Analysis.Normed.Group.Basic
+public import Mathlib.Analysis.Normed.Module.RCLike.Real
+public import Mathlib.Analysis.Normed.Operator.ContinuousLinearMap
+public import Mathlib.Analysis.Complex.Order
+public import Mathlib.Analysis.Normed.Algebra.Spectrum
+public import Mathlib.Order.Basic
+public import Mathlib.Analysis.Normed.Algebra.GelfandFormula
+public import Cslib.CPS.DiscreteLinearTime.Basic
+public import Cslib.CPS.DiscreteLinearTime.Cayley
+
+@[expose] public section
 
 /-!
 # Asymptotic Stability Analysis
@@ -27,6 +33,10 @@ the state converges to zero under zero input.
 ## Main Theorems
 * `asymptotic_stability_discrete`: The main stability theorem.
 * `gelfand_le_one_when_spectral_radius_le_one`: Relates spectral radius to Gelfand limit.
+
+## References
+https://en.wikipedia.org/wiki/Lyapunov_stability
+https://www.cds.caltech.edu/~murray/books/AM08/pdf/fbs-public_24Jul2020.pdf
 -/
 
 

@@ -4,11 +4,13 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Bashar Hamade
 -/
 
-import Cslib.Init
-import Cslib.CPS.DiscreteLinearTime.Basic
-import Cslib.CPS.DiscreteLinearTime.Reachability
-import Cslib.CPS.DiscreteLinearTime.Cayley
+module
 
+public import Cslib.Init
+public import Cslib.CPS.DiscreteLinearTime.Basic
+public import Cslib.CPS.DiscreteLinearTime.Reachability
+public import Cslib.CPS.DiscreteLinearTime.Cayley
+@[expose] public section
 universe u v
 
 variable {σ : Type u} {ι : Type v}
@@ -38,6 +40,12 @@ The main result is the Kalman Controllability Rank Condition.
 after `n` steps (where `n` is the dimension of the state space), due to Cayley-Hamilton.
 * `full_finrank_equivalent_to_reachability`: A system is reachable if and only
 if the controllability matrix has full rank.
+
+
+## References
+https://www.statslab.cam.ac.uk/~rrw1/oc/L08.pdf
+https://en.wikipedia.org/wiki/Controllability
+
 -/
 
 
@@ -64,11 +72,11 @@ theorem evolve_from_zero_eq_sum
     | zero =>
       simp [DiscreteLinearSystemState.evolve_from_zero]
     | succ k ih =>
-      simp [DiscreteLinearSystemState.evolve_from_zero]
+      simp only [evolve_from_zero, add_tsub_cancel_right]
       rw [ih]
-      simp
+      simp only [map_sum]
       rw [Finset.sum_range_succ]
-      simp
+      simp only [tsub_self, pow_zero, ContinuousLinearMap.one_apply, add_left_inj]
       apply Finset.sum_congr rfl
       intro x hx
       have : s.a.comp (s.a ^ (k - 1 - x)) = s.a ^ (k -  x ) := by
@@ -97,7 +105,7 @@ theorem evolution_eq_matrix_form (s : DiscreteLinearSystemState σ ι) (kf : ℕ
     · intros; simp
     · intro ⟨j, hj⟩ _; ext; simp at hj ⊢; omega
     · intro i _; ext; simp; omega
-    · intro ⟨j, hj⟩ _; simp at hj ⊢; (congr; omega)
+    · intro ⟨j, hj⟩ _; simp only [mem_range] at hj ⊢; (congr; omega)
 
 
 /-- The set of reachable states in `k` steps exactly equals
