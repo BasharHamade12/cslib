@@ -220,10 +220,6 @@ lemma zTransformSummable_of_norm_le {e : DiscreteSignal σ} {r : ℝ} (hr : 0 �
     sorry
 
 
-
-
-
-
 /-- The exponential signal aᵏ is summable for |z| > |a|. -/
 lemma zTransformSummable_exponential {a z : ℂ} (hz : ‖a‖ < ‖z‖)  :
     ZTransformSummable (DiscreteSignal.exponential a) z := by
@@ -287,213 +283,49 @@ lemma zTransformSummable_delay {e : DiscreteSignal σ} {z : ℂ} (n : ℕ)
       rw [this, one_mul]
 
 
-
-
-
-
-
-
-
-
-    -- Goal: Summable fun m => z⁻¹ ^ (m + n) • e m
-
-
-
-
-
-/-- Summability of sampled delayed signal. -/
-lemma zTransformSampledSummable_delay {f : SampledSignal σ} {z : ℂ} (n : ℕ)
-    (hf : ZTransformSampledSummable f z) :
-    ZTransformSampledSummable (f.delay n) z := by
-  simp only [ZTransformSampledSummable, SampledSignal.delay]
-  simp only [ZTransformSummable]
-
-  -- Similar to above
-  sorry
-
-
-theorem h_summable (f : SampledSignal σ) (n : ℕ) (z : ℂ)
-    (hf : Summable (fun k : ℕ => (z⁻¹ ^ k) • f.signal k))
-    [IsTopologicalAddGroup σ] [ContinuousConstSMul ℂ σ] [T2Space σ]  :
-    Summable (fun k => (z⁻¹ ^ k) • (if n ≤ k then f.signal (k - n) else 0)) := by
-    obtain ⟨x, hx⟩ := hf
-    refine ⟨(z⁻¹ ^ n) • x, ?_⟩
-
-    have h_shift : HasSum (fun m => z⁻¹ ^ (m + n) • f.signal m) ((z⁻¹ ^ n) • x) := by
-      simp_rw [pow_add, mul_smul]
-      simp_rw [smul_comm (z⁻¹ ^ _) (z⁻¹ ^ n)]
-      exact hx.const_smul (z⁻¹ ^ n)
-
-    have h_zero_prefix : ∑ i ∈ Finset.range n,
-        (z⁻¹ ^ i • if n ≤ i then f.signal (i - n) else 0) = 0 := by
-      apply Finset.sum_eq_zero
-      intro i hi
-      simp [Nat.not_le.mpr (Finset.mem_range.mp hi)]
-
-    have h_eq : (fun k => z⁻¹ ^ (k + n) • if n ≤ k + n then f.signal (k + n - n) else 0) =
-            (fun k => z⁻¹ ^ (k + n) • f.signal k) := by
-      ext k
-      simp only [le_add_iff_nonneg_left, zero_le, ↓reduceIte, add_tsub_cancel_right]
-
-    have : (fun k => z⁻¹ ^ k • if n ≤ k then f.signal (k - n) else 0) =
-      fun k => if k < n then 0 else z⁻¹ ^ k • f.signal (k - n) := by
-      ext k
-      split_ifs <;> simp [*]
-      · omega
-      · omega
-
-    rw [this]
-
-    have h_prefix_zero : ∑ i ∈ Finset.range n,
-      (if i < n then 0 else z⁻¹ ^ i • f.signal (i - n)) = 0 := by
-      apply Finset.sum_eq_zero
-      intro i hi
-      simp [Finset.mem_range.mp hi]
-
-  -- Use hasSum_nat_add_iff': shift the index by n
-    rw [← hasSum_nat_add_iff' n, h_prefix_zero, sub_zero]
-
-  -- Now goal is: HasSum (fun k => if (k+n) < n then 0 else ...) (z⁻¹ ^ n • x)
-  -- Since k+n ≥ n always, the if-condition is false
-    convert h_shift using 1
-    ext m
-    simp only [Nat.not_lt.mpr (Nat.le_add_left n m), ↓reduceIte, Nat.add_sub_cancel]
-
-
-
-
-
-
-
-
-
 theorem zTransform_time_delay (f : SampledSignal σ) (n : ℕ) (z : ℂ)
     (hf : Summable (fun k : ℕ => (z⁻¹ ^ k) • f.signal k))
-    [IsTopologicalAddGroup σ] [ContinuousConstSMul ℂ σ] [T2Space σ] :
+    [IsTopologicalAddGroup σ] [ContinuousConstSMul ℂ σ] [T2Space σ] [Neg ℕ] :
     Z{f.delay n} z = (z⁻¹ ^ n) • Z{f} z := by
   simp only [zTransformSampled, SampledSignal.delay]
-  have h_zero_range : ∑ i ∈ Finset.range n, (z⁻¹ ^ i) •
-  (if n ≤ i then f.signal (i - n) else 0) = 0 := by
-    apply Finset.sum_eq_zero
-    intro i hi
-    simp only [Finset.mem_range] at hi
-    simp [Nat.not_le.mpr hi]
 
-  have h_summable := h_summable f n z hf
-  rw [← Summable.sum_add_tsum_nat_add n h_summable]
-  rw [h_zero_range, zero_add]
-  -- Now goal is: ∑' m, z⁻¹^(m+n) • f.signal m = z⁻¹^n • ∑' k, z⁻¹^k • f.signal k
-  -- Simplify the if-condition since m + n ≥ n
-  have h_simp : ∀ m, (z⁻¹ ^ (m + n)) • (if n ≤ m + n then f.signal (m + n - n) else 0) =
-      (z⁻¹ ^ (m + n)) • f.signal m := by
-    intro m
-    simp only [inv_pow, le_add_iff_nonneg_left, zero_le, ↓reduceIte, add_tsub_cancel_right]
-  simp_rw [h_simp]
-  -- Factor: z⁻¹^(m+n) = z⁻¹^n * z⁻¹^m
-  have h_pow : ∀ m, z⁻¹ ^ (m + n) = z⁻¹ ^ n * z⁻¹ ^ m := by
-    intro m
-    rw [pow_add]
-    simp only [inv_pow]
-    rw [mul_comm]
+  -- Define the delayed term function for clarity
+  let g := fun k => z⁻¹ ^ k • (if n ≤ k then f.signal (k - n) else (0 : σ))
 
-  simp_rw [h_pow, mul_smul]
-  -- Pull out the constant z⁻¹^n
-  -- simp only [inv_pow]
+  -- Summability of g (need this for sum_add_tsum_nat_add)
+  have hg : Summable g := by
+    have := (zTransformSummable_delay n (z := z)).mp hf
+    exact this
 
-  rw [Summable.tsum_const_smul (z⁻¹ ^ n) hf]
+  -- First n terms are zero
+  have h_prefix_zero : ∀ k ∈ Finset.range n, g k = 0 := by
+    intro k hk
+    simp only [g, Finset.mem_range] at hk ⊢
+    simp [Nat.not_le.mpr hk]
+  -- Main calculation using Mathlib lemmas
 
+  -- ⊢ (∑' (k : ℕ), z⁻¹ ^ k • if n ≤ k then f.signal (k - n) else 0) =
+  --  z⁻¹ ^ n • ∑' (k : ℕ), z⁻¹ ^ k • f.signal k
 
-/-! ### Z-Transform Summability -/
-
-/-- A discrete signal's z-transform is summable at z. -/
-def ZTransformSummable (e : DiscreteSignal σ) (z : ℂ) : Prop :=
-  Summable (fun k : ℕ => (z⁻¹ ^ k) • e k)
-
-/-- A sampled signal's z-transform is summable at z. -/
-def ZTransformSampledSummable (e : SampledSignal σ) (z : ℂ) : Prop :=
-  ZTransformSummable e.signal z
-
-/-- Region of convergence: the set of z where the z-transform converges. -/
-def regionOfConvergence (e : DiscreteSignal σ) : Set ℂ :=
-  {z : ℂ | ZTransformSummable e z}
-
-/-! ### Summability Lemmas -/
-
-/-- The zero signal is summable everywhere. -/
-lemma zTransformSummable_zero (z : ℂ) :
-ZTransformSummable (DiscreteSignal.zero : DiscreteSignal σ) z := by
-  simp only [ZTransformSummable, DiscreteSignal.zero, smul_zero]
-  exact summable_zero
-
-/-- The impulse signal is summable everywhere. -/
-lemma zTransformSummable_impulse (z : ℂ) : ZTransformSummable DiscreteSignal.impulse z := by
-  simp only [ZTransformSummable, DiscreteSignal.impulse]
-  apply summable_of_ne_finset_zero (s := {0})
-  intro k hk
-  simp only [Finset.mem_singleton] at hk
-  simp [hk]
-
-/-- A signal bounded by a geometric series is summable for |z| > r. -/
-lemma zTransformSummable_of_norm_le {e : DiscreteSignal σ} {r : ℝ} (hr : 0 ≤ r)
-    (he : ∀ k, ‖e k‖ ≤ r ^ k) {z : ℂ} (hz : r < ‖z‖) :
-    ZTransformSummable e z := by
-  refine Classical.choice ?_
-  simp
-  constructor
-
-  ·
-
-    sorry
-  ·
-    sorry
+  calc ∑' k, g k
+      = (∑ k ∈ Finset.range n, g k) + ∑' k, g (k + n) := by
+          exact (hg.sum_add_tsum_nat_add n).symm
+    _ = 0 + ∑' k, g (k + n) := by
+          rw [Finset.sum_eq_zero h_prefix_zero]
+    _ = ∑' k, z⁻¹ ^ (k + n) • f.signal k := by
+          simp only [g, zero_add, le_add_iff_nonneg_left, zero_le, ↓reduceIte,
+                     add_tsub_cancel_right]
+    _ = ∑' k, z⁻¹ ^ n • (z⁻¹ ^ k • f.signal k) := by
+          congr 1
+          ext k
+          rw [pow_add, mul_smul]
+          exact smul_comm (z⁻¹ ^ k) (z⁻¹ ^ n) (f.signal k)
+    _ = z⁻¹ ^ n • ∑' k, z⁻¹ ^ k • f.signal k := by
+          exact tsum_const_smul'' (z⁻¹ ^ n)
 
 
 
 
 
 
-/-- The exponential signal aᵏ is summable for |z| > |a|. -/
-lemma zTransformSummable_exponential {a z : ℂ} (hz : ‖a‖ < ‖z‖) :
-    ZTransformSummable (DiscreteSignal.exponential a) z := by
-  apply zTransformSummable_of_norm_le (norm_nonneg a)
-  · intro k
-    simp [DiscreteSignal.exponential, norm_pow]
-  · exact hz
-
-/-- Summability of delayed signal from summability of original. -/
-lemma zTransformSummable_delay {e : DiscreteSignal σ} {z : ℂ} (n : ℕ)
-    (he : ZTransformSummable e z) [IsTopologicalAddGroup σ] [T2Space σ] [ContinuousConstSMul ℂ σ]:
-    ZTransformSummable (e.delay n) z := by
-  simp only [ZTransformSummable, DiscreteSignal.delay]
-  -- Use summable_nat_add_iff: Summable f ↔ Summable (fun m => f (m + n))
-  rw [← summable_nat_add_iff n]
-  -- Goal: Summable fun m => z⁻¹ ^ (m + n) • if n ≤ m + n then e (m + n - n) else 0
-  -- Simplify: n ≤ m + n is always true, and m + n - n = m
-  simp only [le_add_iff_nonneg_left, zero_le, ↓reduceIte, add_tsub_cancel_right]
-  -- Goal: Summable fun m => z⁻¹ ^ (m + n) • e m
-  -- Factor: z⁻¹ ^ (m + n) = z⁻¹ ^ n * z⁻¹ ^ m
-  have h_eq : (fun m => z⁻¹ ^ (m + n) • e m) = (fun m => z⁻¹ ^ n • (z⁻¹ ^ m • e m)) := by
-    ext m
-    rw [pow_add, mul_smul]
-    exact smul_comm (z⁻¹ ^ m) (z⁻¹ ^ n) (e m)
-  rw [h_eq]
-  simp
-  -- exact Summable.const_smul he (z⁻¹ ^ n) (does not work)
-  apply Summable.const_smul
-  unfold ZTransformSummable at he
-  simp only [inv_pow] at he
-  exact he
-
-
-
-
-/-- Summability of sampled delayed signal. -/
-lemma zTransformSampledSummable_delay {f : SampledSignal σ} {z : ℂ} (n : ℕ)
-    (hf : ZTransformSampledSummable f z) :
-    ZTransformSampledSummable (f.delay n) z := by
-  simp only [ZTransformSampledSummable, SampledSignal.delay]
-  simp only [ZTransformSummable]
-
-  -- Similar to above
-  sorry
 end DiscreteLinearSystem
