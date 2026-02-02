@@ -33,13 +33,6 @@ the sequence `x` satisfies the linear difference equation `x(k+1) = A x(k) + B u
 variable {σ : Type u} {ι : Type v}
 variable [TopologicalSpace σ] [NormedAddCommGroup σ] [NormedSpace ℂ σ]
 variable [TopologicalSpace ι] [NormedAddCommGroup ι] [NormedSpace ℂ ι]
-* `DiscreteLinearSystemState`: Structure representing the system matrices (A and B),
-the current state, input, and initial state.
-* `DiscreteLinearSystemState.system_evolution`: Function computing the state at time `k`
-given an input sequence.
-* `DiscreteLinearSystemState.satisfies_state_equation`: Proposition stating that
-the sequence `x` satisfies the linear difference equation `x(k+1) = A x(k) + B u(k)`.
--/
 
 variable {σ : Type u} {ι : Type v}
 variable [TopologicalSpace σ] [NormedAddCommGroup σ] [NormedSpace ℂ σ]
@@ -170,7 +163,7 @@ lemma delay_signal_of_ge
 lemma delay_signal_of_ge_sampled
 (f : SampledSignal σ) (n k : ℕ) (hk : n ≤ k) :
     (f.delay n).signal k = f.signal (k - n) := by
-  simp [SampledSignal.delay, hk]
+  simp [SampledSignal.delay, hk ]
 
 #print Summable.add
 
@@ -205,28 +198,6 @@ lemma zTransformSummable_impulse (z : ℂ) : ZTransformSummable DiscreteSignal.i
   simp only [Finset.mem_singleton] at hk
   simp [hk]
 
-/-- A signal bounded by a geometric series is summable for |z| > r. -/
-lemma zTransformSummable_of_norm_le {e : DiscreteSignal σ} {r : ℝ} (hr : 0 ≤ r)
-    (he : ∀ k, ‖e k‖ ≤ r ^ k) {z : ℂ} (hz : r < ‖z‖) :
-    ZTransformSummable e z := by
-  refine Classical.choice ?_
-  simp
-  constructor
-
-  ·
-
-    sorry
-  ·
-    sorry
-
-
-/-- The exponential signal aᵏ is summable for |z| > |a|. -/
-lemma zTransformSummable_exponential {a z : ℂ} (hz : ‖a‖ < ‖z‖)  :
-    ZTransformSummable (DiscreteSignal.exponential a) z := by
-  apply zTransformSummable_of_norm_le (norm_nonneg a)
-  · intro k
-    simp [DiscreteSignal.exponential, norm_pow]
-  · exact hz
 
 /-- Summability of delayed signal from summability of original. -/
 lemma zTransformSummable_delay {e : DiscreteSignal σ} {z : ℂ} (n : ℕ)
@@ -288,25 +259,19 @@ theorem zTransform_time_delay (f : SampledSignal σ) (n : ℕ) (z : ℂ)
     [IsTopologicalAddGroup σ] [ContinuousConstSMul ℂ σ] [T2Space σ] [Neg ℕ] :
     Z{f.delay n} z = (z⁻¹ ^ n) • Z{f} z := by
   simp only [zTransformSampled, SampledSignal.delay]
-
   -- Define the delayed term function for clarity
   let g := fun k => z⁻¹ ^ k • (if n ≤ k then f.signal (k - n) else (0 : σ))
-
   -- Summability of g (need this for sum_add_tsum_nat_add)
   have hg : Summable g := by
     have := (zTransformSummable_delay n (z := z)).mp hf
     exact this
-
   -- First n terms are zero
   have h_prefix_zero : ∀ k ∈ Finset.range n, g k = 0 := by
     intro k hk
     simp only [g, Finset.mem_range] at hk ⊢
     simp [Nat.not_le.mpr hk]
-  -- Main calculation using Mathlib lemmas
-
   -- ⊢ (∑' (k : ℕ), z⁻¹ ^ k • if n ≤ k then f.signal (k - n) else 0) =
   --  z⁻¹ ^ n • ∑' (k : ℕ), z⁻¹ ^ k • f.signal k
-
   calc ∑' k, g k
       = (∑ k ∈ Finset.range n, g k) + ∑' k, g (k + n) := by
           exact (hg.sum_add_tsum_nat_add n).symm
@@ -323,9 +288,46 @@ theorem zTransform_time_delay (f : SampledSignal σ) (n : ℕ) (z : ℂ)
     _ = z⁻¹ ^ n • ∑' k, z⁻¹ ^ k • f.signal k := by
           exact tsum_const_smul'' (z⁻¹ ^ n)
 
+theorem zTransform_linear {f g : SampledSignal σ} {α β : ℂ} {z : ℂ}
+    (hf : Summable (fun k : ℕ => (z⁻¹ ^ k) • f.signal k))
+    (hg : Summable (fun k : ℕ => (z⁻¹ ^ k) • g.signal k))
+    [ContinuousConstSMul ℂ σ] [ IsTopologicalAddGroup σ] [T2Space σ] :
+    Z{⟨fun k => α • f.signal k + β • g.signal k, f.T⟩} z =
+    α • Z{f} z + β • Z{g} z := by
+  simp only [zTransformSampled]
+
+  simp_rw [smul_add]
+
+  -- Step 2: Commute scalars
+  -- z⁻¹^k • (α • f k) = α • (z⁻¹^k • f k)
+  simp_rw [smul_comm (z⁻¹ ^ _) α, smul_comm (z⁻¹ ^ _) β]
+
+  -- Step 3: Split the tsum using tsum_add
+  -- ∑' k, (α • ... + β • ...) = ∑' k, α • ... + ∑' k, β • ...
+  have hf' : Summable (fun k => α • (z⁻¹ ^ k • f.signal k)) := sorry
+  have hg' : Summable (fun k => β • (z⁻¹ ^ k • g.signal k)) := sorry
+
+  -- ∑' (k : ℕ), (α • z⁻¹ ^ k • f.signal k + β • z⁻¹ ^ k • g.signal k)
+  -- = ∑' (k : ℕ), α • z⁻¹ ^ k • f.signal k + ∑' (k : ℕ), β • z⁻¹ ^ k • g.signal k
+  have h_split : ∑' (k : ℕ), (α • z⁻¹ ^ k • f.signal k + β • z⁻¹ ^ k • g.signal k) =
+    ∑' (k : ℕ), α • z⁻¹ ^ k • f.signal k + ∑' (k : ℕ), β • z⁻¹ ^ k • g.signal k := by
+      have hf'' := hf'.hasSum
+      have hg'' := hg'.hasSum
+
+      exact (hf''.add hg'').tsum_eq
+  have h_split2 : ∑' (k : ℕ), (α • z⁻¹ ^ k • f.signal k + β • z⁻¹ ^ k • g.signal k) =
+    ∑' (k : ℕ), α • z⁻¹ ^ k • f.signal k + ∑' (k : ℕ), β • z⁻¹ ^ k • g.signal k := by
+      have hf_hassum := hf'.hasSum
+      have hg_hassum := hg'.hasSum
+      have h_add := hf_hassum.add hg_hassum
+      exact Summable.tsum_add hf' hg'
 
 
+  rw [h_split2]
 
+  -- Step 4: Factor out scalars from the sums using tsum_const_smul''
+  -- (same lemma used in zTransform_time_delay)
+  rw [tsum_const_smul'' α, tsum_const_smul'' β]
 
 
 end DiscreteLinearSystem
