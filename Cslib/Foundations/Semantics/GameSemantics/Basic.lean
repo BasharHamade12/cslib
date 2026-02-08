@@ -76,8 +76,8 @@ A ReachabilityGame consists of:
 - `GameMoves`: An LTS defining the valid moves in the game
 - `g_0`: The initial position of the game
 
-The game is played between a Defender (who tries to reach `G_d`) and an Attacker
-(who tries to avoid `G_d` forever).
+The game is played between a Defender (who tries to reach `G_d`)
+and an Attacker (who tries to avoid `G_d` forever).
 -/
 structure Game where
   /-- The type of transition labels. -/
@@ -279,6 +279,14 @@ theorem Defender_or_Attacker_win (play : @Play G) : DefenderWins play ∨ Attack
     left
     left
     exact hinf
+
+theorem Defender_and_Attacker_cannot_both_win (play : @Play G) :
+¬ (DefenderWins play ∧  AttackerWins play) := by
+  push_neg
+  intro h
+  unfold AttackerWins
+  push_neg
+  exact h
 
 
 /-!

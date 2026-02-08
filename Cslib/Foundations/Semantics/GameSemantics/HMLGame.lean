@@ -259,7 +259,8 @@ The proof proceeds by structural induction on the formula φ, showing that
 each case of the recursive definition of `defenderWinsHML` corresponds
 exactly to the semantic clause for that formula constructor.
 -/
-theorem game_semantics_soundness (lts : LTS State Label) (p : State) (φ : Formula Label) :
+theorem game_semantics_soundness (lts : LTS State Label) (p : State)
+(φ : Formula Label) :
     defenderWinsHML lts p φ ↔ satisfies lts p φ := by
   induction φ using Formula.ind_on generalizing p with
   | h_true =>

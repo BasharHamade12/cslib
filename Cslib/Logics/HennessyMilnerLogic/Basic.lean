@@ -1,4 +1,3 @@
-
 import Cslib.Init
 import Cslib.Foundations.Semantics.LTS.Basic
 
@@ -139,7 +138,8 @@ theorem Formula.ind_on {Label : Type v} {P : Formula Label → Prop}
       apply h_tail
       trivial
 
-/-- If two LTS have the same transition relation, then they satisfy the same formulas -/
+/-- If two LTS have the same transition relation,
+then they satisfy the same formulas -/
 theorem satisfies_independent_of_lts_structure
   {State : Type u} {Label : Type v}
   (lts1 lts2 : LTS State Label)
