@@ -41,30 +41,29 @@ Hennessy-Milner logic formulas, HML[Σ], is inductively defined as follows:
 3. **Negations:** If φ ∈ HML[Σ], then ¬φ ∈ HML[Σ]
 -/
 inductive Formula (Label : Type v) : Type v where
-  /-- The constant truth formula. -/
-  | true : Formula Label
-  /-- The constant false formula. -/
-  | false : Formula Label
-  /-- Modal observation operator: ⟨a⟩φ means
-  "there exists an a-transition to a state satisfying φ". -/
   | modal (a : Label) (φ : Formula Label) : Formula Label
-  /-- Conjunction of a finite list of formulas. -/
   | conj (φs : List (Formula Label)) : Formula Label
-  /-- Negation operator: ¬φ means "not φ". -/
-  | neg (φ : Formula Label) : Formula Label
+  | neg  (φ : Formula Label) : Formula Label
+
+
+namespace Formula
+
+/-- Paper convention: `⊤ = ⋀∅`. -/
+abbrev top : Formula Label := .conj []
+
+/-- Derived: `⊥ = ¬⊤`. -/
+abbrev bot : Formula Label := .neg top
 
 /-- Disjunction of a finite list of formulas (derived connective). -/
-def Formula.disj (φs : List (Formula Label)) : Formula Label :=
+def disj (φs : List (Formula Label)) : Formula Label :=
   Formula.neg (Formula.conj (φs.map Formula.neg))
 
 /-- Implication φ ⊃ ψ (derived connective). -/
-def Formula.impl (φ ψ : Formula Label) : Formula Label :=
+def impl (φ ψ : Formula Label) : Formula Label :=
   Formula.disj [Formula.neg φ, ψ]
 
 /-- Semantic satisfaction relation for HML formulas on LTS states. -/
 def satisfies (lts : LTS State Label) (s : State) : Formula Label → Prop
-  | .true => True
-  | .false => False
   | .modal a φ => ∃ s', lts.Tr s a s' ∧ satisfies lts s' φ
   | .conj φs => ∀ φ ∈ φs, satisfies lts s φ
   | .neg φ => ¬satisfies lts s φ
@@ -95,9 +94,7 @@ theorem satisfies_double_neg (lts : LTS State Label) (s : State) (φ : Formula L
 
 
 /-- Size of a formula (for well-founded recursion) -/
-def Formula.size : Formula Label → Nat
-  | .true => 1
-  | .false => 1
+def size : Formula Label → Nat
   | .modal _ φ => 1 + φ.size
   | .conj φs => 1 + φs.foldr (fun φ acc => φ.size + acc) 0
   | .neg φ => 1 + φ.size
@@ -107,8 +104,6 @@ def Formula.size : Formula Label → Nat
 /-- induction on formula structure -/
 theorem Formula.ind_on {Label : Type v} {P : Formula Label → Prop}
   (φ : Formula Label)
-  (h_true : P .true)
-  (h_false : P .false)
   (h_modal : ∀ a ψ, P ψ → P (.modal a ψ))
   (h_conj : ∀ φs, (∀ φ ∈ φs, P φ) → P (.conj φs))
   (h_neg : ∀ ψ, P ψ → P (.neg ψ))
@@ -116,10 +111,7 @@ theorem Formula.ind_on {Label : Type v} {P : Formula Label → Prop}
   apply Formula.rec
     (motive_1 := P)
     (motive_2 := fun φs => ∀ φ ∈ φs, P φ)
-  · -- true case
-    exact h_true
-  · -- false case
-    exact h_false
+
   · -- modal case
     exact h_modal
   · -- conj case
@@ -147,12 +139,7 @@ theorem satisfies_independent_of_lts_structure
   (s : State) (φ : Formula Label) :
   satisfies lts1 s φ ↔ satisfies lts2 s φ := by
   induction φ using Formula.ind_on generalizing s with
-  | h_true =>
-    -- True case: both are True
-    simp [satisfies]
-  | h_false =>
-    -- False case: both are False
-    simp [satisfies]
+
   | h_modal a ψ ih =>
     -- Modal case: ⟨a⟩ψ
     simp only [satisfies]
@@ -185,6 +172,17 @@ theorem satisfies_independent_of_lts_structure
     -- Negation case: ¬ψ
     simp only [satisfies]
     rw [ih s]
+
+
+def bigConj : List (Formula Label) → Formula Label
+  | []      => top
+  | [φ]     => φ
+  | φ :: ψ :: rest => .conj (φ :: ψ :: rest)
+
+@[simp] lemma bigConj_nil : (bigConj (Label := Label) []) = (top (Label := Label)) := rfl
+@[simp] lemma bigConj_singleton (φ : Formula Label) :
+    bigConj (Label := Label) [φ] = φ := rfl
+end Formula
 
 end HennessyMilner
 
