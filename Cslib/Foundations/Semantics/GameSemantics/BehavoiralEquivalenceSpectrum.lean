@@ -129,6 +129,7 @@ def O_FT : ObservationsSet Label := { φ | InOFT φ }
 inductive InORT : Formula Label → Prop
   | top : InORT Formula.top
   | modal (a : Label) {φ : Formula Label} : InORT φ → InORT (Formula.modal a φ)
+  | negAct (a : Label) : InORT (negObsAct (Label := Label) a)
   | rtConj (φs : List (Formula Label)) (φ₀ : Formula Label) :
       φ₀ ∈ φs →
       InORT φ₀ →
@@ -161,6 +162,7 @@ inductive InOPF : Formula Label → Prop
   | pfConj (φs : List (Formula Label)) :
       (∀ φ, φ ∈ φs → IsPFLit φ) →
       InOPF (Formula.conj φs)
+  | negTrace {ψ : Formula Label} : InOT ψ → InOPF (Formula.neg ψ)
 
 def O_PF : ObservationsSet Label := { φ | InOPF φ }
 
@@ -317,7 +319,7 @@ lemma sublist_map_neg {ψs : List (Formula Label)}
     obtain ⟨ψs', rfl, hψs'_sub⟩ := ih htl
     exact ⟨ψ :: ψs', rfl, by
       intro x hx
-      simp [List.mem_cons] at hx
+      simp only [List.mem_cons] at hx
       cases hx with
       | inl h => rw [h]; exact hψ_mem
       | inr h => exact hψs'_sub h⟩
@@ -355,8 +357,7 @@ theorem O_E_closed : ClosedObservationLanguage (O_E (Label := Label)) := by
     simp only [O_E, Set.mem_setOf_eq] at h
     cases h with
     | act a' => exact InOE.top
-  ·
-    intro φs h
+  · intro φs h
     simp only [O_E, Set.mem_setOf_eq] at h
     cases h
     constructor
@@ -533,7 +534,65 @@ theorem O_FT_closed : ClosedObservationLanguage (O_FT (Label := Label)) := by
 
 theorem O_RT_closed : ClosedObservationLanguage (O_RT (Label := Label)) := by
   -- will do later, do not touch
-  sorry
+  refine ⟨?_, ?_, ?_⟩
+  · intro a φ h
+    cases h
+    trivial
+  · intro φlist h
+    constructor
+    · intro φ1 hmem
+      cases h with
+      | top => contradiction
+      | rtConj φs φ₀ h₀mem hφ₀ hall =>
+        by_cases heq : φ1 = φ₀
+        · subst heq; exact hφ₀
+        · specialize hall φ1 hmem heq
+          cases hall with
+          | pos a => exact InORT.modal a InORT.top
+          | neg a => exact InORT.negAct a
+
+    · intro φs' hsub
+      cases h with
+      | top =>
+        simp only [List.subset_nil] at hsub
+        rw [hsub]
+        exact InORT.top
+      | rtConj φs φ₀ h₀mem hφ₀ hall =>
+        by_cases hempty : φs' = []
+        · subst hempty
+          exact InORT.top
+        · by_cases h₀_in : φ₀ ∈ φs'
+          · refine InORT.rtConj φs' φ₀ h₀_in hφ₀ ?_
+            intro ψ hψ hne
+            exact hall ψ (hsub hψ) hne
+          · obtain ⟨φ₀', hφ₀'_mem⟩ := List.exists_mem_of_ne_nil φs' hempty
+            have hφ₀'_ne : φ₀' ≠ φ₀ := by
+              intro heq
+              apply h₀_in
+              rw [<-heq]
+              exact hφ₀'_mem
+            have hrl : IsReadyLit φ₀' := hall φ₀' (hsub hφ₀'_mem) hφ₀'_ne
+            have hφ₀'_inort : InORT φ₀' := by
+              cases hrl with
+              | pos a =>
+                apply InORT.modal a
+                exact InORT.top
+              | neg a =>
+                exact InORT.negAct a
+            refine InORT.rtConj φs' φ₀' hφ₀'_mem hφ₀'_inort ?_
+            intro ψ hψ hne
+            have hψ_ne_φ₀ : ψ ≠ φ₀ := by
+              intro heq
+              apply h₀_in
+              rw [<-heq]
+              exact hψ
+            exact hall ψ (hsub hψ) hψ_ne_φ₀
+  · intro φ h
+    cases h with
+    | negAct a =>
+      apply InORT.modal a
+      constructor
+
 
 /-! ### Impossible-future observations `O_IF` is closed -/
 
@@ -563,7 +622,6 @@ theorem O_IF_closed : ClosedObservationLanguage (O_IF (Label := Label)) := by
       · intro φs' hsub
         obtain ⟨ψs', rfl, hψs'_sub⟩ := sublist_map_neg hsub
         exact InOIF.ifConj ψs' (fun ψ hψ => hall ψ (hψs'_sub hψ))
-
   · intro φ h
     simp only [O_IF, Set.mem_setOf_eq] at h
     cases h
@@ -597,14 +655,22 @@ theorem O_PF_closed : ClosedObservationLanguage (O_PF (Label := Label)) := by
         cases hpf with
         | pos hψ => exact InOT_to_InOPF hψ
         | neg hψ =>
-
-          sorry
+          constructor
+          trivial
       · intro φs' hsub
         exact InOPF.pfConj φs' (sublist_pfLits hall hsub)
-
   · intro φ h
     simp only [O_PF, Set.mem_setOf_eq] at h
-    cases h
+    cases h with
+    | negTrace hψ => exact InOT_to_InOPF hψ
+
+
+
+
+
+
+
+
 
 /-! ### Simulation observations `O_1S` is closed -/
 
@@ -645,7 +711,6 @@ theorem O_RS_closed : ClosedObservationLanguage (O_RS (Label := Label)) := by
     simp only [O_RS, Set.mem_setOf_eq] at *
     cases h with
     | modal _ hφ => exact hφ
-
   · -- closed_conj
     intro φs h
     simp only [O_RS, Set.mem_setOf_eq] at *
@@ -665,12 +730,11 @@ theorem O_RS_closed : ClosedObservationLanguage (O_RS (Label := Label)) := by
       · intro φs' hsub
         -- Any sublist of a conj is a conj with the restricted membership proof
         exact InORS.conj φs' (fun φ hφ => hall φ (hsub hφ))
-  ·
-    intro φ h
+  · intro φ h
     simp only [O_RS, Set.mem_setOf_eq] at *
     cases h with
     | negAct a =>
-      simp [negObsAct, obsAct]
+      simp only [obsAct]
       exact InORS.modal a InORS.top
 
 /-! ### Bisimulation observations `O_B` is closed -/
