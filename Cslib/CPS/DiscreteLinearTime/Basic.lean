@@ -93,12 +93,6 @@ def satisfies_state_equation : Prop :=
   ∀ k : ℕ, sys.x (k + 1) = sys.A (sys.x k) + sys.B (sys.u k)
 
 
-/-- Evolution from zero initial state with given input -/
-noncomputable def evolveFromZero
-   (u : ℕ → ι) (sys : DiscreteLinearSystemState σ ι) : ℕ → σ
-  | 0 => 0
-  | k + 1 => sys.A (evolveFromZero u sys k) + sys.B (u k)
-
 /-- Zero input sequence -/
 def zeroInput : ℕ → ι := Function.const _ 0
 
