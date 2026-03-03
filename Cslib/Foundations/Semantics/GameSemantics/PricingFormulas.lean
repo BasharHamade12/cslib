@@ -1,5 +1,5 @@
 /-
-Copyright (c) 2025 Bashar Hamade. All rights reserved.
+Copyright (c) 2026 Bashar Hamade. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Bashar Hamade
 -/
@@ -13,28 +13,78 @@ import Cslib.Foundations.Semantics.GameSemantics.BehavoiralEquivalenceSpectrum
 /-!
 # Formula Expressiveness Prices
 
-This module formalizes the formula price lattice (Definition 2.19) and the
-expressiveness price function (Definition 2.20) from [BispingEtAl2022].
+This module formalizes the **formula price lattice** (Definition 2.19) and the
+**expressiveness price function** (Definition 2.20) from [BispingEtAl2022].
 
-The key idea is to overlay the linear-time–branching-time spectrum with a
-six-dimensional price metric that captures the amount of HML expressiveness
-used by a formula. Each dimension measures a different aspect of syntactic
-complexity, and observation languages from the spectrum correspond to
-rectangular regions (upper bounds) in this price lattice.
+## Overview
 
-## Main definitions
+The key insight of Bisping et al. is that the linear-time–branching-time spectrum
+can be characterized by a six-dimensional price metric measuring the syntactic
+complexity of HML formulas. Each behavioral equivalence in the spectrum corresponds
+to a rectangular region (upper bounds on each dimension) in this price lattice.
 
-- `FormulaPrice`: A six-dimensional price vector over `ℕ∞`.
-- `FormulaPrice.Lattice`: The pointwise lattice structure on prices.
-- `Formula.isPositiveBranch`, `Formula.isPositiveFlat`: Classifiers for
-  conjuncts used in computing dimensions 3 and 4.
-- `Formula.hat`: The hat operation `φ̂` that wraps negations in a
-  singleton conjunction.
-- `observations`, `conjunctions`, `posDeepBranches`, `posBranches`,
-  `negations`, `negatedObs`: Each dimension defined as a separate
-  recursive function on HML formulas.
-- `Formula.expr`: The combined expressiveness price (Definition 2.20).
-- `Formula.exprStandalone`: The standalone price `expr(φ̂)`.
+## The Six Dimensions
+
+The price of a formula captures six aspects of its expressive power:
+
+1. **`observations`** (o): Maximum depth of modal operator `⟨a⟩` nesting.
+   - Measures how deep we can observe action sequences
+   - Example: `⟨a⟩⟨b⟩⊤` has observation depth 2
+
+2. **`conjunctions`** (c): Maximum depth of conjunction nesting.
+   - Negations after observations count as implicit conjunctions
+   - Captures the branching structure of the formula
+
+3. **`posDeepBranches`** (pdb): Maximum number of positive deep branches per conjunction.
+   - "Deep" branches are positive branches that are not just `⟨a⟩⊤`
+   - Distinguishes nested conjunctions from flat ones
+
+4. **`posBranches`** (pb): Maximum number of positive (non-negated) branches per conjunction.
+   - Counts non-negated conjuncts
+   - Distinguishes conjunctions with many positive branches
+
+5. **`negations`** (n): Maximum depth of negation nesting.
+   - Measures how deeply negations are nested
+   - Used to characterize nested simulation equivalences
+
+6. **`negatedObs`** (no): Maximum observation depth under negations.
+   - Captures the complexity of observations within negated subformulas
+
+## Mathematical Structure
+
+The price lattice **Pr** is the complete lattice `(ℕ∞)^6` with:
+- Pointwise partial order `≤` (written `⊑` in the paper)
+- Pointwise join `⊔` and meet `⊓`
+- Bottom `⊥ = (0,0,0,0,0,0)` and top `⊤ = (∞,∞,∞,∞,∞,∞)`
+
+## Observation Languages (Table 1)
+
+Each equivalence in the spectrum corresponds to a rectangular region:
+
+| Language | Bound | Description |
+|----------|-------|-------------|
+| `O_E` (Enabledness) | `(1,0,0,0,0,0)` | Single observations only |
+| `O_T` (Traces) | `(∞,0,0,0,0,0)` | Sequences, no conjunctions |
+| `O_F` (Failures) | `(∞,1,0,0,1,1)` | One conjunction of negations |
+| `O_R` (Readiness) | `(∞,1,0,∞,1,1)` | Failures + positive flats |
+| `O_FT` (Failure-traces) | `(∞,∞,1,1,1,1)` | Interleaved traces and failures |
+| `O_RT` (Ready-traces) | `(∞,∞,1,∞,1,1)` | Ready-trace equivalence |
+| `O_IF` (Impossible futures) | `(∞,1,0,0,1,∞)` | Single conjunction of negated traces |
+| `O_PF` (Possible futures) | `(∞,1,∞,∞,1,∞)` | Mixing positive and negated traces |
+| `O_1S` (Simulation) | `(∞,∞,∞,∞,0,0)` | Full conjunctions, no negations |
+| `O_RS` (Ready-simulation) | `(∞,∞,∞,∞,1,1)` | Shallow negations allowed |
+| `O_nS` (n-nested simulation) | `(∞,∞,∞,∞,n,∞)` | n levels of negation nesting |
+| `O_B` (Bisimulation) | `(∞,∞,∞,∞,∞,∞)` | Full HML |
+
+## Main Definitions
+
+- `FormulaPrice`: Six-dimensional price vector over `ℕ∞`
+- `FormulaPrice.Lattice`: Complete lattice structure
+- `Formula.expr`: Expressiveness price function (Definition 2.20)
+- `Formula.exprStandalone`: Standalone price `expr(φ̂)`
+- `Formula.isPositiveBranch`, `Formula.isPositiveFlat`: Conjunct classifiers
+- `Formula.hat`: The `φ̂` operation for wrapping negations
+- `bound_E`, `bound_T`, `bound_F`, etc.: Price bounds for observation languages
 
 ## References
 
@@ -56,18 +106,56 @@ variable {Label : Type v}
 The formula price lattice **Pr** is the complete lattice over `(ℕ ∪ {∞})⁶`
 with the partial order `⊑` defined by pointwise comparison. -/
 
-/-- Six-dimensional expressiveness price of an HML formula.
+/-- Six-dimensional expressiveness price of an HML formula (Definition 2.19).
 
 Each dimension captures a distinct aspect of the syntactic complexity of
 formulas in the linear-time–branching-time spectrum:
 
-1. `observations`:    Depth of modal operator `⟨a⟩` nesting.
-2. `conjunctions`:    Depth of conjunction nesting (negations after
-                      observations count as implicit conjunctions).
-3. `posDeepBranches`: Maximum number of positive deep branches per conjunction.
-4. `posBranches`:     Maximum number of positive branches per conjunction.
-5. `negations`:       Depth of negation nesting.
-6. `negatedObs`:      Maximum observation depth under each negation.
+1. **`observations`**: Depth of modal operator `⟨a⟩` nesting.
+   - Counts the maximum number of nested observations `⟨a⟩` along any path
+   - Example: `⟨a⟩⟨b⟩⊤` has observation depth 2
+   - Example: `⟨a⟩⊤ ∧ ⟨b⟩⊤` has observation depth 1 (conjunction doesn't add)
+
+2. **`conjunctions`**: Depth of conjunction nesting.
+   - Negations immediately after observations count as implicit conjunctions
+   - Example: `⋀{φ₁, φ₂, φ₃}` has conjunction depth 1
+   - Example: `⋀{⋀{φ₁, φ₂}, φ₃}` has conjunction depth 2
+
+3. **`posDeepBranches`**: Maximum number of positive deep branches per conjunction.
+   - A "deep" branch is a positive branch that is NOT of the form `⟨a⟩⊤`
+   - Distinguishes flat conjunctions (just observations) from nested ones
+   - Example: `⋀{⟨a⟩⟨b⟩⊤, ⟨c⟩⊤}` has 1 positive deep branch
+
+4. **`posBranches`**: Maximum number of positive branches per conjunction.
+   - Counts all non-negated conjuncts
+   - Example: `⋀{φ, ¬ψ, χ}` has 2 positive branches (φ and χ)
+
+5. **`negations`**: Depth of negation nesting.
+   - Counts how deeply negations are nested
+   - Used to characterize nested simulation equivalences
+   - Example: `¬¬φ` has negation depth 2
+
+6. **`negatedObs`**: Maximum observation depth under each negation.
+   - Measures the observation complexity within negated subformulas
+   - Example: `¬⟨a⟩⟨b⟩⊤` has negated observation depth 2
+
+The type `ℕ∞` (extended natural numbers) allows representing both finite
+bounds (natural numbers) and infinite bounds (⊤ = ∞) for each dimension.
+
+## Mathematical Properties
+
+`FormulaPrice` forms a complete lattice with:
+- Partial order: pointwise comparison `≤`
+- Join: pointwise maximum `⊔`
+- Meet: pointwise minimum `⊓`
+- Bottom: `(0,0,0,0,0,0)` - the price of `⊤`
+- Top: `(∞,∞,∞,∞,∞,∞)` - unbounded expressiveness
+
+## Implementation Notes
+
+We use `ℕ∞` (from Mathlib) which is `ℕ ∪ {∞}` with the standard order where
+`n < ∞` for all `n : ℕ`. This allows us to represent both concrete finite
+bounds and "unbounded" (∞) for each dimension.
 -/
 structure FormulaPrice where
   /-- Dimension 1: depth of modal operator nesting. -/
@@ -86,10 +174,31 @@ structure FormulaPrice where
 
 namespace FormulaPrice
 
-/-! ### Lattice Structure
+/-! ### Lattice Structure (Definition 2.19)
 
-We equip `FormulaPrice` with a pointwise partial order, join, meet,
-bottom, and top, making it a bounded lattice. -/
+The formula price lattice **Pr** is defined as the complete lattice over `(ℕ∞)^6`
+with the partial order `⊑` (written as `≤` in Lean) defined by pointwise comparison.
+
+For two prices `p = (p₁,...,p₆)` and `q = (q₁,...,q₆)`:
+- `p ≤ q` iff `pᵢ ≤ qᵢ` for all `i ∈ {1,...,6}`
+- `p ⊔ q = (p₁ ⊔ q₁, ..., p₆ ⊔ q₆)` (componentwise maximum)
+- `p ⊓ q = (p₁ ⊓ q₁, ..., p₆ ⊓ q₆)` (componentwise minimum)
+- `⊥ = (0,0,0,0,0,0)` (bottom element)
+- `⊤ = (∞,∞,∞,∞,∞,∞)` (top element)
+
+This structure makes `FormulaPrice` a **bounded complete lattice**, which is essential
+for defining the expressiveness price of composite formulas (conjunctions, disjunctions
+via supremum of constituent prices).
+
+## Why Pointwise?
+
+The pointwise ordering reflects the intuition that:
+- A formula with lower price is "simpler" (belongs to coarser equivalences)
+- A formula with higher price is more expressive (belongs to finer equivalences)
+- The join (`⊔`) captures the price of alternatives (disjunctive information)
+
+This aligns with the paper's notion that observation languages form rectangular regions
+in this price lattice. -/
 
 /-- Extensionality principle for `FormulaPrice`. -/
 @[ext]
@@ -309,12 +418,58 @@ def hat : Formula Label → Formula Label
 
 /-! ### Positive Branches (pb)
 
-The set of positive branches in a conjunction—conjuncts that are not negations.
+The **positive branches** of a conjunction are the conjuncts that are not negations.
+Formally, for a conjunction `⋀{φ₁, ..., φₙ}`:
 
 $$pb = \{\varphi_i \mid \not\exists \varphi'. \varphi_i = \neg \varphi'\}$$
--/
 
-/-- A formula is a positive branch if it is not a negation. -/
+This classification is crucial for dimensions 3 and 4 of the price lattice:
+- **`posBranches`**: The count `|pb|` of all positive branches
+- **`posDeepBranches`**: The count of positive branches that are NOT of the form `⟨a⟩⊤`
+
+## Intuition
+
+In the linear-time–branching-time spectrum, different equivalences allow different
+kinds of conjunctions:
+
+- **Traces** (`O_T`): No conjunctions at all
+- **Failures** (`O_F`): One conjunction of negated observations only
+- **Readiness** (`O_R`): One conjunction mixing negations and positive flats `⟨a⟩⊤`
+- **Simulation** (`O_1S`): Arbitrary conjunctions, but no negations
+- **Bisimulation** (`O_B`): Arbitrary conjunctions with negations
+
+The `posBranches` and `posDeepBranches` dimensions capture exactly these distinctions.
+
+## Examples
+
+- `⋀{⟨a⟩⊤, ⟨b⟩⊤}`: 2 positive branches, 0 positive deep branches (both are flats)
+- `⋀{⟨a⟩⟨b⟩⊤, ⟨c⟩⊤}`: 2 positive branches, 1 positive deep branch (`⟨a⟩⟨b⟩⊤` is deep)
+- `⋀{¬⟨a⟩⊤, ⟨b⟩⊤}`: 1 positive branch, 0 positive deep branches (the negation doesn't count)
+- `⋀{¬⟨a⟩⊤, ¬⟨b⟩⊤}`: 0 positive branches, 0 positive deep branches (all negated)
+
+## Implementation Notes
+
+We define:
+- `isPositiveBranch φ`: Returns true if `φ` is not a negation
+- `positiveBranches φs`: Filters the list to keep only positive branches
+- `countPosBranches φs`: The cardinality `|pb|`
+- `isPositiveFlat φ`: Returns true if `φ = ⟨a⟩⊤` for some action `a`
+- `positiveFlatBranches φs`: Filters to keep only positive flat branches
+- `countPosFlatBranches φs`: The cardinality `|pf|`
+- `countPosDeepBranches φs`: Computes `|pb| - |pf|` (deep branches only)
+
+The subtraction is safe because `pf ⊆ pb` (every flat branch is a positive branch). -/
+
+/-- **Positive Branch Classifier**: Returns true if `φ` is not a negation.
+
+A positive branch is a conjunct that is not of the form `¬ψ`.
+
+## Examples
+- `isPositiveBranch ⟨a⟩⊤ = true` (observations are positive)
+- `isPositiveBranch (⋀{φ₁, φ₂}) = true` (conjunctions are positive)
+- `isPositiveBranch (¬φ) = false` (negations are not positive)
+
+Used to compute `countPosBranches` and `positiveBranches`. -/
 def isPositiveBranch (φ : Formula Label) : Bool := !(isNeg φ)
 
 /-- The list of positive branches in a conjunction. -/
@@ -342,10 +497,53 @@ def countPosFlatBranches (φs : List (Formula Label)) : ℕ :=
 def countPosDeepBranches (φs : List (Formula Label)) : ℕ :=
   countPosBranches φs - countPosFlatBranches φs
 
+/-- **List Supremum** for extended natural numbers (`ℕ∞`).
+
+Computes the supremum (least upper bound) of a list of `ℕ∞` values by folding
+with the maximum operation (`⊔`).
+
+## Mathematical Properties
+
+- `listSupENat [] = 0` (identity element for `⊔`)
+- `listSupENat [x₁, ..., xₙ] = x₁ ⊔ x₂ ⊔ ... ⊔ xₙ ⊔ 0`
+- For any `b : ℕ∞`, if `∀ x ∈ xs, x ≤ b`, then `listSupENat xs ≤ b`
+
+## Usage
+
+Used to compute the maximum conjunction depth across all conjuncts in the
+`conjunctions` dimension of `expr`:
+
+```
+conjunctions = listSupENat (es.map (fun e => 1 + e.conjunctions))
+```
+
+This gives the maximum `1 + e.conjunctions` over all conjunct prices `e`,
+which represents the conjunction nesting depth of the current formula. -/
 noncomputable def listSupENat (xs : List ℕ∞) : ℕ∞ :=
   xs.foldl (· ⊔ ·) 0
 
 
+/-- **List Supremum** for formula prices.
+
+Computes the pointwise supremum of a list of `FormulaPrice` values by folding
+with the join operation (`⊔`).
+
+## Mathematical Properties
+
+- `listSupPrice [] = ⊥ = (0,0,0,0,0,0)` (bottom element)
+- `listSupPrice [p₁, ..., pₙ] = p₁ ⊔ p₂ ⊔ ... ⊔ pₙ ⊔ ⊥`
+- Each dimension is computed independently using `listSupENat`
+
+## Usage
+
+Used in `expr` for conjunctions to compute the supremum of all conjunct prices:
+
+```
+localPrice ⊔ listSupPrice es
+```
+
+This captures the "worst case" price among all conjuncts, which is necessary
+for characterizing the expressiveness of the entire conjunction. -/
 noncomputable def listSupPrice (ps : List FormulaPrice) : FormulaPrice :=
   ps.foldl (· ⊔ ·) ⊥
 
@@ -372,10 +570,54 @@ theorem Formula.fsize_lt_conj {φ : Formula Label} {φs : List (Formula Label)}
       have := ih htl
       omega
 
-/-- The expressiveness price of an HML formula (Definition 2.20).
+/-- The expressiveness price function `expr(φ)` (Definition 2.20).
 
-We inline the computation of `expr(φ̂)` in the modal case to ensure termination,
-since `hat φ` is not structurally smaller when `φ` is a negation.
+Computes the six-dimensional price of an HML formula. The price captures the
+formula's position in the linear-time–branching-time spectrum.
+
+## Pricing Rules
+
+### Observations: `⟨a⟩φ`
+
+An observation `⟨a⟩φ` contributes:
+- `observations`: `1 + expr(φ).observations` (adds one observation level)
+- Other dimensions from `expr(φ̂)` (the "hat" of φ)
+
+The hat operation `φ̂` handles negations specially:
+- If `φ = ¬ψ`, then `φ̂ = ⋀{¬ψ}` (wraps negation in singleton conjunction)
+- Otherwise `φ̂ = φ`
+
+This accounts for the implicit conjunction created when negations follow observations.
+
+### Negations: `¬φ`
+
+A negation `¬φ` contributes:
+- `negations`: `1 + expr(φ).negations` (adds one negation level)
+- `negatedObs`: `expr(φ).observations` (captures observation depth under negation)
+- Plus the price of `φ` itself
+
+### Conjunctions: `⋀{φ₁, ..., φₙ}`
+
+A conjunction contributes:
+- `conjunctions`: `⊔ᵢ(1 + expr(φᵢ).conjunctions)` (max conjunction depth + 1)
+- `posDeepBranches`: `|pb| - |pf|` (deep branches only)
+- `posBranches`: `|pb|` (all positive branches)
+- Plus the supremum of all `expr(φᵢ)`
+
+The conjunction depth is computed as the supremum (maximum) over all conjuncts,
+reflecting the "deepest" branch.
+
+## Termination
+
+The function uses well-founded recursion on `Formula.fsize φ`, which measures
+syntactic size. Each recursive call is on a structurally smaller subformula.
+
+## Implementation Notes
+
+We inline `expr(φ̂)` in the modal case to avoid termination issues:
+- When `φ` is a negation, `hat φ = ⋀{φ}` which is NOT structurally smaller
+- By inlining, we compute the price directly without an explicit recursive call
+- For other cases, `hat φ = φ` which is structurally equal
 -/
 noncomputable def expr : Formula Label → FormulaPrice
   | .modal _a φ =>
@@ -414,74 +656,295 @@ noncomputable def expr : Formula Label → FormulaPrice
       localPrice ⊔ listSupPrice es
 termination_by φ => (Formula.fsize φ)
 
-/-- The standalone price of a formula is `expr(φ̂)`. -/
+/-- **Standalone Expressiveness Price**: `expr(φ̂)`.
+
+Computes the expressiveness price of the "hat" of a formula. The hat operation
+`φ̂` wraps bare negations in singleton conjunctions to ensure proper accounting
+of conjunction depth.
+
+## The Hat Operation
+
+For any formula `φ`:
+- If `φ = ¬ψ` (a bare negation), then `φ̂ = ⋀{¬ψ}` (wrap in singleton conjunction)
+- Otherwise, `φ̂ = φ` (leave unchanged)
+
+## Purpose
+
+The standalone price is used for characterization theorems. A formula `φ`
+belongs to observation language `O_X` if and only if:
+
+```
+exprStandalone φ ≤ bound_X
+```
+
+## Why the Hat?
+
+Without the hat, bare negations like `¬⟨a⟩⊤` would have:
+- `conjunctions = 0` (no explicit conjunction)
+- `negations = 1`
+
+But in the game semantics, a negation after an observation implicitly creates
+a conjunction context. The hat makes this explicit, giving:
+- `conjunctions = 1` (the singleton conjunction)
+- `negations = 1`
+
+This correctly places `¬⟨a⟩⊤` in the failures language `O_F` which requires
+`conjunctions ≤ 1`. -/
 noncomputable def exprStandalone (φ : Formula Label) : FormulaPrice :=
   expr (hat φ)
 
 
 /-! ## Price Bounds for Observation Languages (Table 1)
 
-Each observation language from the linear-time–branching-time spectrum
-corresponds to a rectangular region in the price lattice, defined by an
-upper bound on each dimension. A formula φ belongs to language O_X
-precisely when expr(φ̂) ⊑ bound_X (Lemma 2.23). -/
+Each observation language from the linear-time–branching-time spectrum corresponds
+to a rectangular region (upper bounds) in the price lattice. This section defines
+the bounds for each language from Table 1 of [BispingEtAl2022].
+
+## Characterization Theorem (Lemma 2.23)
+
+A formula `φ` belongs to observation language `O_X` if and only if:
+
+```
+expr(φ̂) ≤ bound_X
+```
+
+where `φ̂` is the hat operation (wrapping bare negations in singleton conjunctions)
+and `≤` is the pointwise order on prices.
+
+## Bounds Summary
+
+| Language | Notation | Bound (o,c,pdb,pb,n,no) | Description |
+|----------|----------|------------------------|-------------|
+| Enabledness | `O_E` | `(1,0,0,0,0,0)` | Single observations `⟨a⟩⊤` |
+| Traces | `O_T` | `(∞,0,0,0,0,0)` | Observation sequences only |
+| Failures | `O_F` | `(∞,1,0,0,1,1)` | One conjunction of negated observations |
+| Readiness | `O_R` | `(∞,1,0,∞,1,1)` | Failures + positive flat branches |
+| Failure-traces | `O_FT` | `(∞,∞,1,1,1,1)` | Interleaved traces and failures |
+| Ready-traces | `O_RT` | `(∞,∞,1,∞,1,1)` | Ready-trace equivalence |
+| Impossible futures | `O_IF` | `(∞,1,0,0,1,∞)` | One conjunction of negated traces |
+| Possible futures | `O_PF` | `(∞,1,∞,∞,1,∞)` | Mixing positive and negated traces |
+| Simulation | `O_1S` | `(∞,∞,∞,∞,0,0)` | Full conjunctions, no negations |
+| Ready-simulation | `O_RS` | `(∞,∞,∞,∞,1,1)` | Shallow negations only |
+| n-nested simulation | `O_nS` | `(∞,∞,∞,∞,n,∞)` | n levels of negation nesting |
+| Bisimulation | `O_B` | `(∞,∞,∞,∞,∞,∞)` | Full HML |
+
+## Notation
+
+- `∞` (⊤): Unbounded in this dimension
+- `o`: observations
+- `c`: conjunctions
+- `pdb`: positive deep branches
+- `pb`: positive branches
+- `n`: negations
+- `no`: negated observations
+
+## Inclusion Hierarchy
+
+The bounds form a lattice under inclusion. Finer equivalences have larger bounds:
+
+```
+bound_E ≤ bound_T ≤ bound_F ≤ bound_R ≤ bound_RT ≤ bound_RS ≤ bound_2S ≤ ... ≤ bound_B
+          bound_T ≤ bound_1S ≤ bound_RS
+          bound_F ≤ bound_FT ≤ bound_RT
+          bound_F ≤ bound_IF ≤ bound_PF ≤ bound_2S
+```
+
+These inclusions are proven in the section "Inclusion Lemmas" below. -/
 
 namespace ObservationLanguage
 
 open FormulaPrice
 
-/-- Price bound for enabledness `O_E`: `(1, 0, 0, 0, 0, 0)`.
-    Only single observations ⟨a⟩ with no nesting. -/
+/-- **Enabledness** `O_E`: `(1, 0, 0, 0, 0, 0)`.
+
+The simplest observation language. Only single observations `⟨a⟩⊤` are allowed.
+
+- `observations = 1`: At most one observation (no nesting)
+- `conjunctions = 0`: No conjunctions allowed
+- `negations = 0`: No negations allowed
+
+Corresponds to formulas that can only observe single actions. -/
 def bound_E : FormulaPrice := ⟨1, 0, 0, 0, 0, 0⟩
 
-/-- Price bound for traces `O_T`: `(∞, 0, 0, 0, 0, 0)`.
-    Arbitrary observation depth, but no conjunctions or negations. -/
+/-- **Traces** `O_T`: `(∞, 0, 0, 0, 0, 0)`.
+
+Trace formulas are sequences of observations `⟨a₁⟩⟨a₂⟩...⟨aₙ⟩⊤`.
+
+- `observations = ∞`: Unbounded observation depth (arbitrary sequences)
+- `conjunctions = 0`: No conjunctions (linear traces only)
+- `negations = 0`: No negations
+
+This is the language of trace equivalence. -/
 def bound_T : FormulaPrice := ⟨⊤, 0, 0, 0, 0, 0⟩
 
-/-- Price bound for failures `O_F`: `(∞, 1, 0, 0, 1, 1)`.
-    Traces extended with a single conjunction of negated actions. -/
+/-- **Failures** `O_F`: `(∞, 1, 0, 0, 1, 1)`.
+
+Failure formulas extend traces with a single conjunction of negated observations.
+Example: `⟨a₁⟩...⟨aₙ⟩⋀{¬⟨b₁⟩⊤, ..., ¬⟨bₖ⟩⊤}`.
+
+- `observations = ∞`: Unbounded trace prefix
+- `conjunctions = 1`: Exactly one conjunction (at the end)
+- `posBranches = 0`: Only negated branches in the conjunction
+- `negations = 1`: One level of negation
+- `negatedObs = 1`: Simple observations under negation
+
+Characterizes failures equivalence (must/should testing). -/
 def bound_F : FormulaPrice := ⟨⊤, 1, 0, 0, 1, 1⟩
 
-/-- Price bound for readiness `O_R`: `(∞, 1, 0, ∞, 1, 1)`.
-    Like failures but allowing positive flat branches (enabled actions). -/
+/-- **Readiness** `O_R`: `(∞, 1, 0, ∞, 1, 1)`.
+
+Readiness formulas extend failures with positive flat branches.
+Example: `⟨a₁⟩...⟨aₙ⟩⋀{⟨b₁⟩⊤, ..., ⟨bₖ⟩⊤, ¬⟨c₁⟩⊤, ..., ¬⟨cₘ⟩⊤}`.
+
+- `observations = ∞`: Unbounded trace prefix
+- `conjunctions = 1`: Exactly one conjunction
+- `posBranches = ∞`: Arbitrary positive flat branches `⟨b⟩⊤`
+- `posDeepBranches = 0`: No deep positive branches
+- `negations = 1`: One level of negation
+
+Characterizes readiness equivalence. -/
 def bound_R : FormulaPrice := ⟨⊤, 1, 0, ⊤, 1, 1⟩
 
-/-- Price bound for failure-traces `O_FT`: `(∞, ∞, 1, 1, 1, 1)`.
-    Interleaved traces and failure sets with one deep branch per conjunction. -/
+/-- **Failure-Traces** `O_FT`: `(∞, ∞, 1, 1, 1, 1)`.
+
+Failure-trace formulas allow interleaving of traces and failure sets.
+They can have nested conjunctions with at most one deep positive branch.
+
+- `observations = ∞`: Unbounded
+- `conjunctions = ∞`: Nested conjunctions allowed
+- `posDeepBranches = 1`: At most one deep positive branch per conjunction
+- `posBranches = 1`: At most one positive branch per conjunction
+- `negations = 1`: One level of negation
+
+Characterizes failure-trace equivalence. -/
 def bound_FT : FormulaPrice := ⟨⊤, ⊤, 1, 1, 1, 1⟩
 
-/-- Price bound for ready-traces `O_RT`: `(∞, ∞, 1, ∞, 1, 1)`.
-    Like failure-traces but with arbitrary positive branches. -/
+/-- **Ready-Traces** `O_RT`: `(∞, ∞, 1, ∞, 1, 1)`.
+
+Ready-trace formulas extend failure-traces with arbitrary positive branches.
+
+- `observations = ∞`: Unbounded
+- `conjunctions = ∞`: Nested conjunctions allowed
+- `posDeepBranches = 1`: At most one deep positive branch per conjunction
+- `posBranches = ∞`: Arbitrary positive branches allowed
+- `negations = 1`: One level of negation
+
+Characterizes ready-trace equivalence. -/
 def bound_RT : FormulaPrice := ⟨⊤, ⊤, 1, ⊤, 1, 1⟩
 
-/-- Price bound for impossible futures `O_IF`: `(∞, 1, 0, 0, 1, ∞)`.
-    Single conjunction of negated trace observations. -/
+/-- **Impossible Futures** `O_IF`: `(∞, 1, 0, 0, 1, ∞)`.
+
+Impossible-futures formulas are traces ending in a single conjunction
+of negated traces (not just negated observations).
+
+- `observations = ∞`: Unbounded trace prefix
+- `conjunctions = 1`: Exactly one conjunction
+- `posBranches = 0`: No positive branches
+- `negations = 1`: One level of negation
+- `negatedObs = ∞`: Arbitrary observations under negation (negated traces)
+
+Characterizes impossible-futures equivalence. -/
 def bound_IF : FormulaPrice := ⟨⊤, 1, 0, 0, 1, ⊤⟩
 
-/-- Price bound for possible futures `O_PF`: `(∞, 1, ∞, ∞, 1, ∞)`.
-    Single conjunction mixing positive and negated traces. -/
+/-- **Possible Futures** `O_PF`: `(∞, 1, ∞, ∞, 1, ∞)`.
+
+Possible-futures formulas allow a single conjunction mixing positive traces
+and negated traces.
+
+- `observations = ∞`: Unbounded
+- `conjunctions = 1`: Exactly one conjunction
+- `posDeepBranches = ∞`: Arbitrary deep positive branches
+- `posBranches = ∞`: Arbitrary positive branches
+- `negations = 1`: One level of negation
+- `negatedObs = ∞`: Arbitrary observations under negation
+
+Characterizes possible-futures equivalence. -/
 def bound_PF : FormulaPrice := ⟨⊤, 1, ⊤, ⊤, 1, ⊤⟩
 
-/-- Price bound for simulation `O_1S`: `(∞, ∞, ∞, ∞, 0, 0)`.
-    Full conjunctive power but no negations. -/
+/-- **Simulation** `O_1S`: `(∞, ∞, ∞, ∞, 0, 0)`.
+
+Simulation formulas have full conjunctive power but no negations.
+
+- `observations = ∞`: Unbounded
+- `conjunctions = ∞`: Arbitrary conjunction nesting
+- `posDeepBranches = ∞`: Arbitrary deep positive branches
+- `posBranches = ∞`: Arbitrary positive branches
+- `negations = 0`: No negations allowed
+- `negatedObs = 0`: No observations under negation (no negations)
+
+Characterizes simulation equivalence. -/
 def bound_1S : FormulaPrice := ⟨⊤, ⊤, ⊤, ⊤, 0, 0⟩
 
-/-- Price bound for ready-simulation `O_RS`: `(∞, ∞, ∞, ∞, 1, 1)`.
-    Simulation with shallow negations (only ¬⟨a⟩). -/
+/-- **Ready-Simulation** `O_RS`: `(∞, ∞, ∞, ∞, 1, 1)`.
+
+Ready-simulation formulas extend simulation with shallow negations
+(negations only applied to simple observations `¬⟨a⟩⊤`).
+
+- `observations = ∞`: Unbounded
+- `conjunctions = ∞`: Arbitrary conjunctions
+- `posDeepBranches = ∞`: Arbitrary deep positive branches
+- `posBranches = ∞`: Arbitrary positive branches
+- `negations = 1`: One level of negation
+- `negatedObs = 1`: Only simple observations under negation
+
+Characterizes ready-simulation equivalence. -/
 def bound_RS : FormulaPrice := ⟨⊤, ⊤, ⊤, ⊤, 1, 1⟩
 
-/-- Price bound for `(n+1)`-nested simulation `O_{(n+1)S}`: `(∞, ∞, ∞, ∞, n, ∞)`.
-    Simulation with n levels of negation alternation. -/
+/-- **n-Nested Simulation** `O_{(n+1)S}`: `(∞, ∞, ∞, ∞, n, ∞)`.
+
+(n+1)-nested simulation allows n levels of negation nesting.
+The parameter `n` specifies the maximum negation depth.
+
+- `observations = ∞`: Unbounded
+- `conjunctions = ∞`: Arbitrary conjunctions
+- `posDeepBranches = ∞`: Arbitrary deep positive branches
+- `posBranches = ∞`: Arbitrary positive branches
+- `negations = n`: n levels of negation nesting
+- `negatedObs = ∞`: Arbitrary observations under negation
+
+Characterizes (n+1)-nested simulation equivalence.
+Note: `bound_nS 0 = bound_1S` (simulation), `bound_nS 1 = bound_RS` (ready-simulation). -/
 def bound_nS (n : ℕ) : FormulaPrice := ⟨⊤, ⊤, ⊤, ⊤, n, ⊤⟩
 
-/-- Price bound for bisimulation `O_B`: `(∞, ∞, ∞, ∞, ∞, ∞)`.
-    Full HML with no restrictions. -/
+/-- **Bisimulation** `O_B`: `(∞, ∞, ∞, ∞, ∞, ∞)`.
+
+Full Hennessy-Milner Logic (HML) with no restrictions.
+All dimensions are unbounded (⊤ = ∞).
+
+This is the top of the price lattice and characterizes bisimulation equivalence,
+the finest equivalence in the linear-time–branching-time spectrum. -/
 def bound_B : FormulaPrice := ⟨⊤, ⊤, ⊤, ⊤, ⊤, ⊤⟩
 
 /-! ### Inclusion Lemmas
 
-The spectrum forms a lattice under inclusion. Finer equivalences have
-larger price bounds. -/
+The observation languages form a lattice under inclusion. Finer equivalences
+(those that distinguish more processes) have larger price bounds.
+
+This section proves all the inclusions from the linear-time–branching-time
+spectrum (Figure 1 of [BispingEtAl2022]):
+
+```
+                        O_E (enabledness)
+                          |
+                    O_T (traces)
+                   /          \
+          O_F (failures)   O_1S (simulation)
+            |    \         /    |
+        O_R (readiness)   O_RS (ready-sim)
+            |    \         /    |
+      O_FT (fail-traces)  O_2S (2-nested)
+            |    \         /    |
+      O_RT (ready-traces) O_3S (3-nested)
+            |              ...
+        O_IF (impossible)     |
+            |    \           O_B (bisimulation)
+        O_PF (possible)       |
+            |                ...
+           O_2S <------------┘
+```
+
+All inclusions are proven by showing `bound_X ≤ bound_Y` using the pointwise
+order on `FormulaPrice`. -/
 
 theorem bound_E_le_bound_T : bound_E ≤ bound_T := by
   simp [bound_E, bound_T, le_def, le_top]
@@ -604,7 +1067,7 @@ theorem InOE_implies_price_bound {φ : Formula Label} (h : InOE φ) :
     expr (Formula.neg (Formula.modal a (Formula.conj ([] : List (Formula Label))))) =
       ⟨1, 0, 0, 0, 1, 1⟩ := by
   rw [expr_neg_formula]
-  simp [expr_modal_conj_nil]
+  simp only [expr_modal_conj_nil, add_zero]
   ext <;> simp
 
 /-! ### Helper: trace formulas are never negations -/
@@ -616,7 +1079,7 @@ theorem InOT_not_neg {φ : Formula Label} (h : InOT φ) : ∀ ψ, φ ≠ .neg ψ
 
 theorem InOT_exprStandalone_eq_expr {φ : Formula Label} (h : InOT φ) :
     exprStandalone φ = expr φ := by
-  simp [exprStandalone]
+  simp only [exprStandalone]
   cases h with
   | top       => rfl
   | modal _ _ => rfl
@@ -634,7 +1097,9 @@ theorem InOT_implies_price_bound {φ : Formula Label} (h : InOT φ) :
     rw [InOT_exprStandalone_eq_expr hψ] at ih
     simp only [bound_T, le_def] at ih ⊢
     obtain ⟨_, h2, h3, h4, h5, h6⟩ := ih
-    simp
+    simp only [sup_observations, self_le_add_left, sup_of_le_left, le_top, sup_conjunctions,
+      zero_le, sup_of_le_right, nonpos_iff_eq_zero, sup_posDeepBranches, sup_posBranches,
+      sup_negations, sup_negatedObs, true_and]
     constructor
     · exact nonpos_iff_eq_zero.mp h2
     · exact ⟨nonpos_iff_eq_zero.mp h3,
@@ -671,14 +1136,9 @@ theorem InOF_exprStandalone_eq_expr_of_not_negAct {φ : Formula Label} (h : InOF
   simp only [exprStandalone, negObsAct, obsAct, Formula.top, hat]
   -- Goal: expr (.conj [.neg (.modal a (.conj []))]) = ⟨1, 1, 0, 0, 1, 1⟩
   unfold expr
-  simp only [expr_negObsAct,
-             countPosDeepBranches, countPosBranches, positiveBranches,
-             countPosFlatBranches, positiveFlatBranches,
-             isPositiveBranch, isNeg, isPositiveFlat,
-             List.filter_cons, List.filter_nil, Bool.not_true,
-             ite_false, List.length_nil,
-             listSupENat, List.map, List.foldl,
-             listSupPrice]
+  simp only [listSupENat, countPosDeepBranches, countPosBranches, positiveBranches,
+    List.filter_cons, isPositiveBranch, isNeg, Bool.not_true, List.filter_nil, countPosFlatBranches,
+    positiveFlatBranches, isPositiveFlat, listSupPrice]
   ext <;> simp
 
 /-! ### Helper: price of `failConj` conjunctions
@@ -709,7 +1169,32 @@ theorem countPosFlatBranches_map_negObsAct (as : List Label) :
   simp [countPosFlatBranches, positiveFlatBranches]
 
 
-/-- `foldl (⊔)` over `ℕ∞` is bounded when init and all elements are bounded. -/
+/-- **Boundedness of List Supremum**.
+
+If all elements of a list are bounded by `b`, and the initial value is also
+bounded by `b`, then the fold of supremum is bounded by `b`.
+
+## Mathematical Statement
+
+For any semilattice with supremum (`⊔`), if:
+- `init ≤ b` (initial value is bounded)
+- `∀ x ∈ xs, x ≤ b` (all elements are bounded)
+
+Then: `xs.foldl (· ⊔ ·) init ≤ b`
+
+## Proof Strategy
+
+Induction on the list `xs`:
+- Base: `foldl f init [] = init ≤ b` by assumption
+- Step: `foldl f init (x :: xs) = foldl f (init ⊔ x) xs`
+  - By induction hypothesis, suffices to show `init ⊔ x ≤ b`
+  - This follows from `init ≤ b` and `x ≤ b`
+
+## Usage
+
+Used to prove `listSupENat_le` and `listSupPrice_le`, which are the main
+lemmas for showing that expressiveness prices respect the bounds of
+observation languages. -/
 theorem foldl_sup_le {α : Type _} [SemilatticeSup α] {xs : List α} {b init : α}
     (hinit : init ≤ b) (hxs : ∀ x ∈ xs, x ≤ b) :
     xs.foldl (· ⊔ ·) init ≤ b := by
@@ -717,18 +1202,70 @@ theorem foldl_sup_le {α : Type _} [SemilatticeSup α] {xs : List α} {b init : 
   | nil =>
       simpa using hinit
   | cons x xs ih =>
-      simp [List.foldl_cons]
+      simp only [List.foldl_cons]
       apply ih
       · exact sup_le hinit (hxs x (by simp))
       · intro y hy
         exact hxs y (by simp [hy])
 
+/-- **Boundedness of `listSupENat`**.
+
+If all elements of a list are bounded by `b`, then the list supremum is bounded by `b`.
+
+## Mathematical Statement
+
+For `xs : List ℕ∞` and `b : ℕ∞`:
+
+```
+(∀ x ∈ xs, x ≤ b) → listSupENat xs ≤ b
+```
+
+## Corollary
+
+This is the key lemma for proving that the `conjunctions` dimension of a formula
+is bounded. When computing `expr` for a conjunction, we show that each conjunct's
+conjunction depth (plus one) is bounded, hence the supremum is bounded.
+
+## Example Usage
+
+In `expr_failConj_le_bound_F`, we use this to show:
+```
+listSupENat depths ≤ 1
+```
+where `depths` contains `1 + e.conjunctions` for each conjunct price `e`. -/
 theorem listSupENat_le {xs : List ℕ∞} {b : ℕ∞}
     (hxs : ∀ x ∈ xs, x ≤ b) :
     listSupENat xs ≤ b := by
   unfold listSupENat
-  exact foldl_sup_le (α := ℕ∞) (xs := xs) (init := 0) (b := b) (by simpa) hxs
+  exact foldl_sup_le (α := ℕ∞) (xs := xs) (init := 0) (b := b) (by simp) hxs
 
+/-- **Boundedness of `listSupPrice`**.
+
+If all formula prices in a list are bounded by `b`, then the list supremum is bounded by `b`.
+
+## Mathematical Statement
+
+For `xs : List FormulaPrice` and `b : FormulaPrice`:
+
+```
+(∀ x ∈ xs, x ≤ b) → listSupPrice xs ≤ b
+```
+
+## Proof
+
+This follows directly from `foldl_sup_le` with:
+- Initial value: `⊥` (bottom)
+- Bound: `b`
+- Proof that `⊥ ≤ b`: `bot_le`
+
+## Usage
+
+Main lemma for proving that the supremum of conjunct prices is bounded.
+In `expr_failConj_le_bound_F`, we use this to show:
+```
+listSupPrice es ≤ bound_F
+```
+where `es` contains the prices of all conjuncts. -/
 theorem listSupPrice_le {xs : List FormulaPrice} {b : FormulaPrice}
     (hxs : ∀ x ∈ xs, x ≤ b) :
     listSupPrice xs ≤ b := by
@@ -828,7 +1365,7 @@ theorem expr_failConj_le_bound_F (as : List Label) :
         expr_attach_map_eq (Label := Label) φs
 
       -- unfold expr on the conjunction; rewrite away attach.map; simp turns ⊔-bound into ∧
-      simp [expr, φs, hes]
+      simp only [List.map_cons, expr, List.attach_cons, expr_negObsAct', List.map_map, sup_le_iff]
 
       constructor
       · -- local ≤ bound_F
@@ -883,6 +1420,19 @@ theorem expr_failConj_le_bound_F (as : List Label) :
 
             simp only [expr_negObsAct']
             rw [this]
+
+        constructor
+        simp only [List.map_cons, φs] at hpd ⊢
+        exact hpd
+
+        simp only [List.map_cons, φs] at hpb ⊢
+
+        exact hpb
+
+
+
+
+
 
 
 

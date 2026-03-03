@@ -111,7 +111,6 @@ theorem Formula.ind_on {Label : Type v} {P : Formula Label → Prop}
   apply Formula.rec
     (motive_1 := P)
     (motive_2 := fun φs => ∀ φ ∈ φs, P φ)
-
   · -- modal case
     exact h_modal
   · -- conj case
@@ -139,7 +138,6 @@ theorem satisfies_independent_of_lts_structure
   (s : State) (φ : Formula Label) :
   satisfies lts1 s φ ↔ satisfies lts2 s φ := by
   induction φ using Formula.ind_on generalizing s with
-
   | h_modal a ψ ih =>
     -- Modal case: ⟨a⟩ψ
     simp only [satisfies]
