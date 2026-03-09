@@ -329,5 +329,156 @@ theorem zTransform_linear {f g : SampledSignal σ} {α β : ℂ} {z : ℂ}
   -- (same lemma used in zTransform_time_delay)
   rw [tsum_const_smul'' α, tsum_const_smul'' β]
 
+open scoped BigOperators
+
+
+theorem hf_deriv_interchange
+    {σ : Type u} [NormedAddCommGroup σ] [NormedSpace ℂ σ]
+    (f : SampledSignal σ) (z : ℂ)
+    (hz : z ≠ 0) :
+    deriv (fun w : ℂ => ∑' k : ℕ, (w⁻¹ ^ k) • f.signal k) z =
+      ∑' k : ℕ, deriv (fun w : ℂ => (w⁻¹ ^ k) • f.signal k) z := by
+
+    sorry
+theorem zTransform_multiplication_by_k
+    {σ : Type u} [NormedAddCommGroup σ] [NormedSpace ℂ σ]
+    (f : SampledSignal σ) (z : ℂ)
+    (hz : z ≠ 0)
+    (hf_deriv_interchange :
+      deriv (fun w : ℂ => ∑' k : ℕ, (w⁻¹ ^ k) • f.signal k) z =
+        ∑' k : ℕ, deriv (fun w : ℂ => (w⁻¹ ^ k) • f.signal k) z) :
+    Z{⟨fun k => (k : ℂ) • f.signal k, f.T⟩} z = -z • deriv (Z{f}) z := by
+
+  simp only [zTransformSampled]
+
+
+  /- Step 1: derivative of `w ↦ w⁻¹ ^ k` -/
+  have h_deriv_term :
+      ∀ k : ℕ, deriv (fun w : ℂ => w⁻¹ ^ k) z = -(k : ℂ) * z⁻¹ ^ (k + 1) := by
+    intro k
+
+    have h_eq : (fun w : ℂ => w⁻¹ ^ k) = (fun w : ℂ => w ^ (-(k : ℤ))) := by
+      ext w
+      -- (w⁻¹)^k = (w^k)⁻¹ = w^(-k)
+      -- your original route:
+      rw [zpow_neg, zpow_natCast]
+      simp only [inv_pow]
+    rw [h_eq]
+    have h_zpow :
+        HasDerivAt (fun w : ℂ => w ^ (-(k : ℤ)))
+          ((↑(-(k : ℤ)) * z ^ (-(k : ℤ) - 1))) z :=
+      hasDerivAt_zpow (-(k : ℤ)) z (Or.inl hz)
+    rw [h_zpow.deriv]
+    congr 1
+    · push_cast; ring
+    ·
+      rw [show (-(k : ℤ) - 1 : ℤ) = -((k : ℤ) + 1) from by ring]
+      simp only [neg_add_rev, Int.reduceNeg, inv_pow]
+      rw [← inv_pow, show (-1 : ℤ) + -↑k = -(↑k + 1) by ring, zpow_neg]
+      simp only [inv_pow, inv_inj]
+      norm_cast
+
+  /- Step 2: algebra identity -/
+  have h_algebra :
+      ∀ k : ℕ, -z * (-(k : ℂ) * z⁻¹ ^ (k + 1)) = (k : ℂ) * z⁻¹ ^ k := by
+    intro k
+    calc
+      -z * (-(k : ℂ) * z⁻¹ ^ (k + 1))
+          = z * ((k : ℂ) * z⁻¹ ^ (k + 1)) := by ring
+      _   = (k : ℂ) * (z * z⁻¹ ^ (k + 1)) := by ring
+      _   = (k : ℂ) * z⁻¹ ^ k := by
+            -- z * z⁻¹^(k+1) = z⁻¹^k
+            simp [pow_succ, mul_assoc, mul_left_comm, mul_comm, hz]
+
+  /- Step 3: derivative of each term `w ↦ (w⁻¹^k) • const` -/
+  have h_term_deriv :
+      ∀ k : ℕ,
+        deriv (fun w : ℂ => (w⁻¹ ^ k) • f.signal k) z
+          = (-(k : ℂ) * z⁻¹ ^ (k + 1)) • f.signal k := by
+    intro k
+    have hd_inv : DifferentiableAt ℂ (fun w : ℂ => w⁻¹) z := by
+      simpa using (DifferentiableAt.inv differentiableAt_id hz)
+
+    -- This is the line you asked for: it works once we keep `w⁻¹ ^ k` in this normal form
+    have hd : DifferentiableAt ℂ (fun w : ℂ => w⁻¹ ^ k) z := by
+      -- `hd_inv.pow k : DifferentiableAt ℂ (fun w => (w⁻¹) ^ k) z`
+      apply DifferentiableAt.pow
+      exact hd_inv
+
+
+    have h_smul_const :
+        deriv (fun w : ℂ => (w⁻¹ ^ k) • f.signal k) z =
+          deriv (fun w : ℂ => w⁻¹ ^ k) z • f.signal k := by
+      simpa using ((hd.hasDerivAt).smul_const (f.signal k)).deriv
+    rw [h_smul_const, h_deriv_term k]
+
+
+
+  /- Step 4: rewrite derivative of the whole series -/
+  have h_series :
+      deriv (fun w : ℂ => ∑' k : ℕ, (w⁻¹ ^ k) • f.signal k) z
+        = ∑' k : ℕ, (-(k : ℂ) * z⁻¹ ^ (k + 1)) • f.signal k := by
+    rw [hf_deriv_interchange]
+    congr 1
+    ext k
+    exact h_term_deriv k
+
+  -- Main calculation
+  calc
+    (∑' k : ℕ, z⁻¹ ^ k • ((k : ℂ) • f.signal k))
+        = ∑' k : ℕ, (z⁻¹ ^ k * (k : ℂ)) • f.signal k := by
+            congr 1
+            ext k
+            -- a • (b • v) = (a*b) • v
+            simp [smul_smul, mul_assoc]
+    _   = ∑' k : ℕ, ((k : ℂ) * z⁻¹ ^ k) • f.signal k := by
+            congr 1
+            ext k
+            simp [mul_comm, mul_left_comm, mul_assoc]
+    _   = ∑' k : ℕ, (-z * (-(k : ℂ) * z⁻¹ ^ (k + 1))) • f.signal k := by
+            congr 1
+            ext k
+            specialize h_algebra k
+            rw [h_algebra]
+    _   = ∑' k : ℕ, (-z) • ((-(k : ℂ) * z⁻¹ ^ (k + 1)) • f.signal k) := by
+            congr 1
+            ext k
+            -- (a*b) • v = a • (b • v)
+            simp [smul_smul, mul_assoc]
+    _   = (-z) • ∑' k : ℕ, (-(k : ℂ) * z⁻¹ ^ (k + 1)) • f.signal k := by
+            rw [tsum_const_smul'' (-z)]
+    _   = (-z) • deriv (fun w : ℂ => ∑' k : ℕ, (w⁻¹ ^ k) • f.signal k) z := by
+            -- use h_series (reversed)
+            rw [h_series.symm]
+
+def SampledSignal.mul_by_index (f : SampledSignal σ) : SampledSignal σ where
+  signal := fun k => (k : ℂ) • f.signal k
+  T := f.T
+
+theorem zTransform_multiplication_by_k_2
+    {σ : Type u} [NormedAddCommGroup σ] [NormedSpace ℂ σ]
+    (f : SampledSignal σ) (z : ℂ)
+    (hz : z ≠ 0)
+    (hf_deriv_interchange :
+      deriv (fun w : ℂ => ∑' k : ℕ, (w⁻¹ ^ k) • f.signal k) z =
+        ∑' k : ℕ, deriv (fun w : ℂ => (w⁻¹ ^ k) • f.signal k) z) :
+    Z{f.mul_by_index} z = -z • deriv (Z{f}) z := by
+    simp
+    simp only [zTransformSampled, SampledSignal.mul_by_index]
+    sorry
+
+
+theorem zTransform_multiplication_by_k_3
+    {σ : Type u} [NormedAddCommGroup σ] [NormedSpace ℂ σ]
+    (f : SampledSignal σ) (z : ℂ)
+    (hz : z ≠ 0)
+    (k : ℕ)
+    (hf_deriv_interchange :
+      deriv (fun w : ℂ => ∑' k : ℕ, (w⁻¹ ^ k) • f.signal k) z =
+        ∑' k : ℕ, deriv (fun w : ℂ => (w⁻¹ ^ k) • f.signal k) z) :
+    Z{⟨f.signal k, f.T⟩} z = -z • deriv (Z{f}) z := by
+
+    sorry
+
 
 end DiscreteLinearSystem
