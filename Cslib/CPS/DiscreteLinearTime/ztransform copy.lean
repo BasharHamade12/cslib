@@ -198,10 +198,10 @@ lemma zTransformSummable_impulse (z : ℂ) : ZTransformSummable DiscreteSignal.i
   simp only [Finset.mem_singleton] at hk
   simp [hk]
 
-
-/-- Summability of delayed signal from summability of original. -/
+/-- Summability of delayed signal from summability of original.
+    Note: Removed spurious [Neg ℕ] requirement. -/
 lemma zTransformSummable_delay {e : DiscreteSignal σ} {z : ℂ} (n : ℕ)
-    [IsTopologicalAddGroup σ] [T2Space σ] [Neg ℕ] [ContinuousConstSMul ℂ σ]:
+    [IsTopologicalAddGroup σ] [T2Space σ] [ContinuousConstSMul ℂ σ]:
      ZTransformSummable e z ↔ ZTransformSummable (e.delay n) z := by
   have h_eq : (fun m => z⁻¹ ^ (m + n) • e m) = (fun m => z⁻¹ ^ n • (z⁻¹ ^ m • e m)) := by
       ext m
@@ -211,20 +211,10 @@ lemma zTransformSummable_delay {e : DiscreteSignal σ} {z : ℂ} (n : ℕ)
   ·
     intro he
     simp only [ZTransformSummable, DiscreteSignal.delay]
-    -- Use summable_nat_add_iff: Summable f ↔ Summable (fun m => f (m + n))
     rw [← summable_nat_add_iff n]
-    -- Goal: Summable fun m => z⁻¹ ^ (m + n) • if n ≤ m + n then e (m + n - n) else 0
-    -- Simplify: n ≤ m + n is always true, and m + n - n = m
     simp only [le_add_iff_nonneg_left, zero_le, ↓reduceIte, add_tsub_cancel_right]
-    -- Goal: Summable fun m => z⁻¹ ^ (m + n) • e m
-    -- Factor: z⁻¹ ^ (m + n) = z⁻¹ ^ n * z⁻¹ ^ m
-
     rw [h_eq]
-    simp
-    -- exact Summable.const_smul he (z⁻¹ ^ n) (does not work)
     apply Summable.const_smul
-    unfold ZTransformSummable at he
-    simp only [inv_pow] at he
     exact he
   ·
     intro h_delay
@@ -233,45 +223,35 @@ lemma zTransformSummable_delay {e : DiscreteSignal σ} {z : ℂ} (n : ℕ)
     rw [← summable_nat_add_iff n] at h_delay
     simp only [le_add_iff_nonneg_left, zero_le, ↓reduceIte, add_tsub_cancel_right] at h_delay
     rw [h_eq] at h_delay
-    simp only [inv_pow] at h_delay
-    -- h_delay : Summable (fun m => (z ^ n)⁻¹ • (z ^ m)⁻¹ • e m)
-    -- Goal: Summable (fun k => (z ^ k)⁻¹ • e k)
     by_cases hz : z = 0
-    · -- z = 0 case: only k = 0 term matters
-      simp only [hz, inv_zero, zero_pow] at h_delay ⊢
+    · simp [hz]
       apply summable_of_ne_finset_zero (s := {0})
       intro k hk
-      simp only [Finset.mem_singleton] at hk
-      simp only [ne_eq, hk, not_false_eq_true, zero_pow, zero_smul]
+      simp [Finset.mem_singleton] at hk
+      simp [hk]
     · have h_smul := h_delay.const_smul (z ^ n)
       simp only [smul_smul] at h_smul
       convert h_smul using 1
       ext k
       simp only [inv_pow]
       nth_rewrite 1 [<-mul_assoc]
-      have : z ^ n * (z ^ n)⁻¹ = 1 := by
-        field_simp
+      have : z ^ n * (z ^ n)⁻¹ = 1 := by field_simp
       rw [this, one_mul]
-
 
 theorem zTransform_time_delay (f : SampledSignal σ) (n : ℕ) (z : ℂ)
     (hf : Summable (fun k : ℕ => (z⁻¹ ^ k) • f.signal k))
-    [IsTopologicalAddGroup σ] [ContinuousConstSMul ℂ σ] [T2Space σ] [Neg ℕ] :
+    [IsTopologicalAddGroup σ] [ContinuousConstSMul ℂ σ] [T2Space σ] :
     Z{f.delay n} z = (z⁻¹ ^ n) • Z{f} z := by
   simp only [zTransformSampled, SampledSignal.delay]
-  -- Define the delayed term function for clarity
   let g := fun k => z⁻¹ ^ k • (if n ≤ k then f.signal (k - n) else (0 : σ))
-  -- Summability of g (need this for sum_add_tsum_nat_add)
   have hg : Summable g := by
+    -- Now this works because zTransformSummable_delay no longer requires [Neg ℕ]
     have := (zTransformSummable_delay n (z := z)).mp hf
     exact this
-  -- First n terms are zero
   have h_prefix_zero : ∀ k ∈ Finset.range n, g k = 0 := by
     intro k hk
     simp only [g, Finset.mem_range] at hk ⊢
     simp [Nat.not_le.mpr hk]
-  -- ⊢ (∑' (k : ℕ), z⁻¹ ^ k • if n ≤ k then f.signal (k - n) else 0) =
-  --  z⁻¹ ^ n • ∑' (k : ℕ), z⁻¹ ^ k • f.signal k
   calc ∑' k, g k
       = (∑ k ∈ Finset.range n, g k) + ∑' k, g (k + n) := by
           exact (hg.sum_add_tsum_nat_add n).symm
@@ -287,7 +267,6 @@ theorem zTransform_time_delay (f : SampledSignal σ) (n : ℕ) (z : ℂ)
           exact smul_comm (z⁻¹ ^ k) (z⁻¹ ^ n) (f.signal k)
     _ = z⁻¹ ^ n • ∑' k, z⁻¹ ^ k • f.signal k := by
           exact tsum_const_smul'' (z⁻¹ ^ n)
-
 theorem zTransform_linear {f g : SampledSignal σ} {α β : ℂ} {z : ℂ}
     (hf : Summable (fun k : ℕ => (z⁻¹ ^ k) • f.signal k))
     (hg : Summable (fun k : ℕ => (z⁻¹ ^ k) • g.signal k))
@@ -329,156 +308,65 @@ theorem zTransform_linear {f g : SampledSignal σ} {α β : ℂ} {z : ℂ}
   -- (same lemma used in zTransform_time_delay)
   rw [tsum_const_smul'' α, tsum_const_smul'' β]
 
-open scoped BigOperators
 
 
-theorem hf_deriv_interchange
-    {σ : Type u} [NormedAddCommGroup σ] [NormedSpace ℂ σ]
-    (f : SampledSignal σ) (z : ℂ)
-    (hz : z ≠ 0) :
-    deriv (fun w : ℂ => ∑' k : ℕ, (w⁻¹ ^ k) • f.signal k) z =
-      ∑' k : ℕ, deriv (fun w : ℂ => (w⁻¹ ^ k) • f.signal k) z := by
+theorem zTransform_mul_sub_one_eq_sub {f : DiscreteSignal σ} {z : ℂ}
+    [IsTopologicalAddGroup σ] [ContinuousConstSMul ℂ σ] [T2Space σ] :
+    (z - 1) • (∑' k, (z⁻¹ ^ k) • f k) =
+    -- We express the image's term ∑ f_k z^{-(k-1)} as z • F(z)
+    (z • (∑' k, (z⁻¹ ^ k) • f k)) - (∑' k, (z⁻¹ ^ k) • f k) := by
+  -- The proof is immediate from algebra: (a-b)*x = a*x - b*x
+  rw [sub_smul]
+  simp
 
-    sorry
-theorem zTransform_multiplication_by_k
-    {σ : Type u} [NormedAddCommGroup σ] [NormedSpace ℂ σ]
-    (f : SampledSignal σ) (z : ℂ)
+theorem zTransform_mul_sub_one_split {f : DiscreteSignal σ} {z : ℂ}
     (hz : z ≠ 0)
-    (hf_deriv_interchange :
-      deriv (fun w : ℂ => ∑' k : ℕ, (w⁻¹ ^ k) • f.signal k) z =
-        ∑' k : ℕ, deriv (fun w : ℂ => (w⁻¹ ^ k) • f.signal k) z) :
-    Z{⟨fun k => (k : ℂ) • f.signal k, f.T⟩} z = -z • deriv (Z{f}) z := by
+    (hf : Summable (fun k => (z⁻¹ ^ k) • f k))
+    [IsTopologicalAddGroup σ] [ContinuousConstSMul ℂ σ] [T2Space σ] :
+    (z - 1) • (∑' k, (z⁻¹ ^ k) • f k) =
+    (z • f 0 + ∑' k, (z⁻¹ ^ k) • f (k + 1)) - (∑' k, (z⁻¹ ^ k) • f k) := by
+  rw [sub_smul]
 
-  simp only [zTransformSampled]
 
-
-  /- Step 1: derivative of `w ↦ w⁻¹ ^ k` -/
-  have h_deriv_term :
-      ∀ k : ℕ, deriv (fun w : ℂ => w⁻¹ ^ k) z = -(k : ℂ) * z⁻¹ ^ (k + 1) := by
-    intro k
-
-    have h_eq : (fun w : ℂ => w⁻¹ ^ k) = (fun w : ℂ => w ^ (-(k : ℤ))) := by
-      ext w
-      -- (w⁻¹)^k = (w^k)⁻¹ = w^(-k)
-      -- your original route:
-      rw [zpow_neg, zpow_natCast]
-      simp only [inv_pow]
-    rw [h_eq]
-    have h_zpow :
-        HasDerivAt (fun w : ℂ => w ^ (-(k : ℤ)))
-          ((↑(-(k : ℤ)) * z ^ (-(k : ℤ) - 1))) z :=
-      hasDerivAt_zpow (-(k : ℤ)) z (Or.inl hz)
-    rw [h_zpow.deriv]
+  congr 1
+  · rw [Summable.tsum_eq_zero_add hf]
+    simp only [pow_zero, one_smul]
+    rw [smul_add]
     congr 1
-    · push_cast; ring
-    ·
-      rw [show (-(k : ℤ) - 1 : ℤ) = -((k : ℤ) + 1) from by ring]
-      simp only [neg_add_rev, Int.reduceNeg, inv_pow]
-      rw [← inv_pow, show (-1 : ℤ) + -↑k = -(↑k + 1) by ring, zpow_neg]
-      simp only [inv_pow, inv_inj]
-      norm_cast
-
-  /- Step 2: algebra identity -/
-  have h_algebra :
-      ∀ k : ℕ, -z * (-(k : ℂ) * z⁻¹ ^ (k + 1)) = (k : ℂ) * z⁻¹ ^ k := by
-    intro k
-    calc
-      -z * (-(k : ℂ) * z⁻¹ ^ (k + 1))
-          = z * ((k : ℂ) * z⁻¹ ^ (k + 1)) := by ring
-      _   = (k : ℂ) * (z * z⁻¹ ^ (k + 1)) := by ring
-      _   = (k : ℂ) * z⁻¹ ^ k := by
-            -- z * z⁻¹^(k+1) = z⁻¹^k
-            simp [pow_succ, mul_assoc, mul_left_comm, mul_comm, hz]
-
-  /- Step 3: derivative of each term `w ↦ (w⁻¹^k) • const` -/
-  have h_term_deriv :
-      ∀ k : ℕ,
-        deriv (fun w : ℂ => (w⁻¹ ^ k) • f.signal k) z
-          = (-(k : ℂ) * z⁻¹ ^ (k + 1)) • f.signal k := by
-    intro k
-    have hd_inv : DifferentiableAt ℂ (fun w : ℂ => w⁻¹) z := by
-      simpa using (DifferentiableAt.inv differentiableAt_id hz)
-
-    -- This is the line you asked for: it works once we keep `w⁻¹ ^ k` in this normal form
-    have hd : DifferentiableAt ℂ (fun w : ℂ => w⁻¹ ^ k) z := by
-      -- `hd_inv.pow k : DifferentiableAt ℂ (fun w => (w⁻¹) ^ k) z`
-      apply DifferentiableAt.pow
-      exact hd_inv
-
-
-    have h_smul_const :
-        deriv (fun w : ℂ => (w⁻¹ ^ k) • f.signal k) z =
-          deriv (fun w : ℂ => w⁻¹ ^ k) z • f.signal k := by
-      simpa using ((hd.hasDerivAt).smul_const (f.signal k)).deriv
-    rw [h_smul_const, h_deriv_term k]
-
-
-
-  /- Step 4: rewrite derivative of the whole series -/
-  have h_series :
-      deriv (fun w : ℂ => ∑' k : ℕ, (w⁻¹ ^ k) • f.signal k) z
-        = ∑' k : ℕ, (-(k : ℂ) * z⁻¹ ^ (k + 1)) • f.signal k := by
-    rw [hf_deriv_interchange]
+    rw [← tsum_const_smul'']
     congr 1
     ext k
-    exact h_term_deriv k
-
-  -- Main calculation
-  calc
-    (∑' k : ℕ, z⁻¹ ^ k • ((k : ℂ) • f.signal k))
-        = ∑' k : ℕ, (z⁻¹ ^ k * (k : ℂ)) • f.signal k := by
-            congr 1
-            ext k
-            -- a • (b • v) = (a*b) • v
-            simp [smul_smul, mul_assoc]
-    _   = ∑' k : ℕ, ((k : ℂ) * z⁻¹ ^ k) • f.signal k := by
-            congr 1
-            ext k
-            simp [mul_comm, mul_left_comm, mul_assoc]
-    _   = ∑' k : ℕ, (-z * (-(k : ℂ) * z⁻¹ ^ (k + 1))) • f.signal k := by
-            congr 1
-            ext k
-            specialize h_algebra k
-            rw [h_algebra]
-    _   = ∑' k : ℕ, (-z) • ((-(k : ℂ) * z⁻¹ ^ (k + 1)) • f.signal k) := by
-            congr 1
-            ext k
-            -- (a*b) • v = a • (b • v)
-            simp [smul_smul, mul_assoc]
-    _   = (-z) • ∑' k : ℕ, (-(k : ℂ) * z⁻¹ ^ (k + 1)) • f.signal k := by
-            rw [tsum_const_smul'' (-z)]
-    _   = (-z) • deriv (fun w : ℂ => ∑' k : ℕ, (w⁻¹ ^ k) • f.signal k) z := by
-            -- use h_series (reversed)
-            rw [h_series.symm]
-
-def SampledSignal.mul_by_index (f : SampledSignal σ) : SampledSignal σ where
-  signal := fun k => (k : ℂ) • f.signal k
-  T := f.T
-
-theorem zTransform_multiplication_by_k_2
-    {σ : Type u} [NormedAddCommGroup σ] [NormedSpace ℂ σ]
-    (f : SampledSignal σ) (z : ℂ)
-    (hz : z ≠ 0)
-    (hf_deriv_interchange :
-      deriv (fun w : ℂ => ∑' k : ℕ, (w⁻¹ ^ k) • f.signal k) z =
-        ∑' k : ℕ, deriv (fun w : ℂ => (w⁻¹ ^ k) • f.signal k) z) :
-    Z{f.mul_by_index} z = -z • deriv (Z{f}) z := by
-    simp
-    simp only [zTransformSampled, SampledSignal.mul_by_index]
-    sorry
+    rw [smul_smul]
+    congr 1
+    rw [pow_succ, mul_comm z, mul_assoc, inv_mul_cancel₀ hz, mul_one]
+  · exact one_smul _ _
 
 
-theorem zTransform_multiplication_by_k_3
-    {σ : Type u} [NormedAddCommGroup σ] [NormedSpace ℂ σ]
-    (f : SampledSignal σ) (z : ℂ)
-    (hz : z ≠ 0)
-    (k : ℕ)
-    (hf_deriv_interchange :
-      deriv (fun w : ℂ => ∑' k : ℕ, (w⁻¹ ^ k) • f.signal k) z =
-        ∑' k : ℕ, deriv (fun w : ℂ => (w⁻¹ ^ k) • f.signal k) z) :
-    Z{⟨f.signal k, f.T⟩} z = -z • deriv (Z{f}) z := by
+theorem tsum_reindex_shift {f : ℕ → σ} {z : ℂ}
+    [IsTopologicalAddGroup σ] [ContinuousConstSMul ℂ σ] [T2Space σ] :
+    ∑' k : ℕ, (z⁻¹ ^ k) • f (k + 1) = ∑' k : ℕ, (z⁻¹ ^ k) • f (k + 1) := rfl
 
-    sorry
 
+
+
+theorem zTransform_difference_limit {f : ℕ → σ} {z : ℂ}
+    (hf : Summable (fun k => (z⁻¹ ^ k) • f k))
+    (hf' : Summable (fun k => (z⁻¹ ^ k) • f (k + 1)))
+    [IsTopologicalAddGroup σ] [ContinuousConstSMul ℂ σ] [T2Space σ] :
+    Filter.Tendsto
+      (fun K => ∑ k ∈  Finset.range (K + 1), (z⁻¹ ^ k) • (f (k + 1) - f k))
+      Filter.atTop
+      (nhds (∑' k, (z⁻¹ ^ k) • f (k + 1) - ∑' k, (z⁻¹ ^ k) • f k)) := by
+  have hdiff : Summable (fun k => (z⁻¹ ^ k) • (f (k + 1) - f k)) := by
+    simp_rw [smul_sub]
+    exact Summable.sub hf' hf
+  rw [← Summable.tsum_sub hf' hf]
+  have : (fun k => z⁻¹ ^ k • f (k + 1) - z⁻¹ ^ k • f k) =
+         (fun k => z⁻¹ ^ k • (f (k + 1) - f k)) := by
+    ext k
+    rw [smul_sub]
+  rw [this]
+  simpa [Function.comp] using
+    (hdiff.tendsto_sum_tsum_nat).comp (Filter.tendsto_add_atTop_nat 1)
 
 end DiscreteLinearSystem
