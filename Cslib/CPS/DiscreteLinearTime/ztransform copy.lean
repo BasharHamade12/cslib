@@ -369,4 +369,278 @@ theorem zTransform_difference_limit {f : ℕ → σ} {z : ℂ}
   simpa [Function.comp] using
     (hdiff.tendsto_sum_tsum_nat).comp (Filter.tendsto_add_atTop_nat 1)
 
+/-- Final Value Theorem (limit form):
+    lim_{z→1} (z-1)·F(z) = f₀ + lim_{K→∞} ∑_{k=0}^{K} (f_{k+1} - f_k)
+    whenever the partial sums converge. -/
+theorem zTransform_final_value_limit {f : ℕ → σ} {L : σ}
+    (hconv : Filter.Tendsto
+      (fun K => ∑ k ∈ Finset.range (K + 1), (f (k + 1) - f k))
+      Filter.atTop
+      (nhds L))
+    [IsTopologicalAddGroup σ] [ContinuousConstSMul ℂ σ] [T2Space σ] :
+    Filter.Tendsto
+      (fun K => f 0 + ∑ k ∈ Finset.range (K + 1), (f (k + 1) - f k))
+      Filter.atTop
+      (nhds (f 0 + L)) := by
+  -- The limit of (f₀ + partial sums) is f₀ + L
+  exact Filter.Tendsto.const_add (f 0) hconv
+
+
+
+/-- At z = 1 the expression z • f 0 + ∑' k, z⁻¹ ^ k • (f (k+1) - f k)
+    simplifies to f 0 + ∑' k, (f (k+1) - f k).
+
+    This is the algebraic core of the Final Value Theorem step:
+      lim_{z→1}(f₀·z + ∑_k (f_{k+1} - f_k) z⁻ᵏ) = f₀ + ∑_k (f_{k+1} - f_k). -/
+theorem zTransform_difference_eval_at_one {f : ℕ → σ}
+    [IsTopologicalAddGroup σ] [ContinuousConstSMul ℂ σ] [T2Space σ] :
+    (1 : ℂ) • f 0 + ∑' k, ((1 : ℂ)⁻¹ ^ k) • (f (k + 1) - f k) =
+    f 0 + ∑' k, (f (k + 1) - f k) := by
+  congr 1
+  · exact one_smul ℂ (f 0)
+  · simp only [inv_one, one_pow, one_smul]
+
+
+/-- As z → 1, the expression z • f 0 + ∑' k, z⁻¹^k • (f(k+1) - f k)
+    tends to f 0 + ∑' k, (f(k+1) - f k).
+
+    This is the analytic (limit) form of the Final Value Theorem step:
+      lim_{z→1}(f₀·z + ∑_{k≥0}(f_{k+1}-f_k)z⁻ᵏ) = f₀ + ∑_{k≥0}(f_{k+1}-f_k).
+
+    The hypothesis `hcont` asserts that the z-transform of the difference signal
+    is continuous at z = 1 (which follows, e.g., from uniform convergence of
+    the power series on a neighbourhood of z = 1). -/
+theorem zTransform_difference_tendsto_one {f : ℕ → σ}
+
+    (hcont : Filter.Tendsto
+      (fun z : ℂ => ∑' k, (z⁻¹ ^ k) • (f (k + 1) - f k))
+      (nhds 1)
+      (nhds (∑' k, (f (k + 1) - f k))))
+    [IsTopologicalAddGroup σ] [ContinuousSMul ℂ σ] [ContinuousConstSMul ℂ σ] [T2Space σ] :
+    Filter.Tendsto
+      (fun z : ℂ => z • f 0 + ∑' k, (z⁻¹ ^ k) • (f (k + 1) - f k))
+      (nhds 1)
+      (nhds (f 0 + ∑' k, (f (k + 1) - f k))) := by
+  apply Filter.Tendsto.add
+  · -- Part 1: z • f 0 → 1 • f 0 = f 0 as z → 1
+    have h : Filter.Tendsto (fun z : ℂ => z • f 0) (nhds 1) (nhds ((1 : ℂ) • f 0)) :=  by
+      apply Filter.Tendsto.smul
+      · exact Filter.tendsto_id
+      · exact tendsto_const_nhds
+    rwa [one_smul] at h
+  · -- Part 2: the tsum is continuous at z = 1 (by hypothesis)
+    exact hcont
+
+
+/-- Finite telescoping sum: ∑_{k=0}^{K} (f_{k+1} - f_k) = f_{K+1} - f_0 -/
+theorem telescoping_sum_finite (f : ℕ → σ) (K : ℕ) :
+    ∑ k ∈ Finset.range (K + 1), (f (k + 1) - f k) = f (K + 1) - f 0 := by
+  induction K with
+  | zero =>
+    simp [Finset.range_one]
+  | succ K ih =>
+    rw [Finset.sum_range_succ, ih]
+    abel
+
+/-- Adding f_0 to the telescoping sum gives f_{K+1}:
+    f_0 + ∑_{k=0}^{K} (f_{k+1} - f_k) = f_{K+1} -/
+theorem telescoping_sum_with_initial (f : ℕ → σ) (K : ℕ) :
+    f 0 + ∑ k ∈ Finset.range (K + 1), (f (k + 1) - f k) = f (K + 1) := by
+  rw [telescoping_sum_finite]
+  abel
+
+open Filter
+
+theorem limit_of_telescoping_sum {f : ℕ → σ} {L : σ} [ContinuousAdd σ]
+    (hconv : Filter.Tendsto (fun K => ∑ k ∈ Finset.range (K + 1),
+    (f (k + 1) - f k)) atTop (nhds L)) :
+    Filter.Tendsto (fun K => f (K + 1)) atTop (nhds (f 0 + L)) := by
+  have h_eq : (fun K => f (K + 1)) =
+  (fun K => f 0 + ∑ k ∈ Finset.range (K + 1), (f (k + 1) - f k)) := by
+    ext K
+    exact (telescoping_sum_with_initial f K).symm
+  rw [h_eq]
+  exact Filter.Tendsto.const_add (f 0) hconv
+
+theorem final_value_theorem_limit_step {f : ℕ → σ} {L : σ} [ContinuousAdd σ] [T2Space σ]
+    (hconv : Filter.Tendsto (fun K => ∑ k ∈ Finset.range (K + 1), (f (k + 1) - f k)) atTop (nhds L))
+    (hlim_f : Filter.Tendsto f atTop (nhds L)) :
+    f 0 + L = L := by
+  have h_sum := telescoping_sum_with_initial f
+  have h_tendsto : Filter.Tendsto (fun K =>
+  f 0 + ∑ k ∈ Finset.range (K + 1), (f (k + 1) - f k)) atTop (nhds (f 0 + L)) := by
+    exact Filter.Tendsto.const_add (f 0) hconv
+  have h_eq : (fun K => f 0 + ∑ k ∈ Finset.range (K + 1),
+  (f (k + 1) - f k)) = (fun K => f (K + 1)) := by
+    ext K
+    rw [h_sum]
+  rw [h_eq] at h_tendsto
+  have h_succ : Filter.Tendsto (fun K => f (K + 1)) atTop (nhds L) := by
+    apply Filter.Tendsto.comp
+    simpa
+    exact Filter.tendsto_add_atTop_nat 1
+  exact tendsto_nhds_unique h_tendsto h_succ
+
+
+theorem zTransform_difference_tendsto_one_of_bound
+    {f : ℕ → σ}
+    [CompleteSpace σ]
+    [ContinuousConstSMul ℂ σ] [ContinuousSMul ℂ σ]
+    [IsTopologicalAddGroup σ] [T2Space σ]
+    (u : ℕ → ℝ)
+    (hu : Summable u)
+    (hbound : ∀ k z, z ∈ ({0}ᶜ : Set ℂ) →
+      ‖(z⁻¹ ^ k) • (f (k + 1) - f k)‖ ≤ u k) :
+    Filter.Tendsto
+      (fun z : ℂ => ∑' k, (z⁻¹ ^ k) • (f (k + 1) - f k))
+      (nhds 1)
+      (nhds (∑' k, (f (k + 1) - f k))) := by
+  have hcontOn :
+      ContinuousOn
+        (fun z : ℂ => ∑' k, (z⁻¹ ^ k) • (f (k + 1) - f k))
+        ({0}ᶜ : Set ℂ) := by
+    apply continuousOn_tsum
+    · intro k
+      intro z hz
+      have hz' : z ≠ 0 := by simpa using hz
+      exact
+        ((ContinuousAt.inv₀ continuousAt_id hz').pow k).smul continuousAt_const
+          |>.continuousWithinAt
+    · exact hu
+    · intro k z hz
+      exact hbound k z hz
+
+  have h1 : (1 : ℂ) ∈ ({0}ᶜ : Set ℂ) := by
+    simp
+
+  have hcontAt :
+      ContinuousAt
+        (fun z : ℂ => ∑' k, (z⁻¹ ^ k) • (f (k + 1) - f k))
+        1 := by
+    exact (hcontOn 1 h1).continuousAt (by simpa using h1)
+
+  simpa [inv_one, one_pow, one_smul] using hcontAt.tendsto
+
+theorem final_value_theorem (f : SampledSignal σ) (L : σ)
+    (h_summable : ∀ z : ℂ, z ≠ 0 → Summable (fun k => (z⁻¹ ^ k) • f.signal k))
+    (h_summable_shift : ∀ z : ℂ, z ≠ 0 → Summable (fun k => (z⁻¹ ^ k) • f.signal (k + 1)))
+    [IsTopologicalAddGroup σ] [ContinuousConstSMul ℂ σ]
+    [ContinuousAdd σ] [T2Space σ] [ContinuousSMul ℂ σ] [ CompleteSpace σ] :
+    Filter.Tendsto f.signal atTop (nhds L) =
+    Filter.Tendsto (fun z : ℂ => (z - 1) • Z{f} z) (nhds 1) (nhds L) := by
+  simp only [zTransformSampled]
+  -- writing the step zTransform_mul_sub_one_split
+  have h_rw1 : ∀ z : ℂ, z ≠ 0 →
+      (z - 1) • (∑' k, (z⁻¹ ^ k) • f.signal k) =
+      (z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • f.signal (k + 1)) -
+        (∑' k, (z⁻¹ ^ k) • f.signal k) := by
+    intro z hz
+    exact zTransform_mul_sub_one_split hz (h_summable z hz)
+
+  have h_ne : ∀ᶠ z : ℂ in nhds (1 : ℂ), z ≠ 0 := by
+    exact isClosed_singleton.isOpen_compl.mem_nhds (by simp)
+
+  have h_rw1_eventually :
+      (fun z : ℂ => (z - 1) • (∑' k, (z⁻¹ ^ k) • f.signal k))
+        =ᶠ[nhds (1 : ℂ)]
+      (fun z : ℂ =>
+        (z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • f.signal (k + 1)) -
+          (∑' k, (z⁻¹ ^ k) • f.signal k)) := by
+    filter_upwards [h_ne] with z hz
+    exact h_rw1 z hz
+
+  have h_tendsto_rw1 :
+      Filter.Tendsto (fun z : ℂ => (z - 1) • ∑' k, (z⁻¹ ^ k) • f.signal k) (nhds 1) (nhds L) ↔
+      Filter.Tendsto
+        (fun z : ℂ =>
+          (z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • f.signal (k + 1)) -
+            (∑' k, (z⁻¹ ^ k) • f.signal k))
+        (nhds 1) (nhds L) := by
+    constructor <;> intro h
+    · exact h.congr' h_rw1_eventually
+    · exact h.congr' h_rw1_eventually.symm
+
+  rw [propext h_tendsto_rw1]
+  have h_diff_limit : ∀ z : ℂ, z ≠ 0 →
+    Filter.Tendsto
+      (fun K => ∑ k ∈ Finset.range (K + 1), (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k))
+      Filter.atTop
+      (nhds (∑' k, (z⁻¹ ^ k) • f.signal (k + 1) - ∑' k, (z⁻¹ ^ k) • f.signal k)) := by
+    intro z hz
+    exact zTransform_difference_limit
+      (f := f.signal) (z := z)
+      (h_summable z hz)
+      (h_summable_shift z hz)
+
+  have h_diff_limit_add : ∀ z : ℂ, z ≠ 0 →
+    Filter.Tendsto
+      (fun K => z • f.signal 0 +
+        ∑ k ∈ Finset.range (K + 1), (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k))
+      Filter.atTop
+      (nhds (z • f.signal 0 +
+        (∑' k, (z⁻¹ ^ k) • f.signal (k + 1) - ∑' k, (z⁻¹ ^ k) • f.signal k))) := by
+    intro z hz
+    exact Filter.Tendsto.const_add (z • f.signal 0) (h_diff_limit z hz)
+
+  have h_rw2 : ∀ z : ℂ, z ≠ 0 →
+      (z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • f.signal (k + 1)) -
+        (∑' k, (z⁻¹ ^ k) • f.signal k)
+      =
+      z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k) := by
+    intro z hz
+    rw [add_sub_assoc]
+    rw [← Summable.tsum_sub (h_summable_shift z hz) (h_summable z hz)]
+    congr 1
+    sorry
+
+  have h_rw2_eventually :
+      (fun z : ℂ =>
+        (z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • f.signal (k + 1)) -
+          (∑' k, (z⁻¹ ^ k) • f.signal k))
+        =ᶠ[nhds (1 : ℂ)]
+      (fun z : ℂ =>
+        z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k)) := by
+    filter_upwards [h_ne] with z hz
+    exact h_rw2 z hz
+
+  have h_tendsto_rw2 :
+      Filter.Tendsto
+        (fun z : ℂ =>
+          (z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • f.signal (k + 1)) -
+            (∑' k, (z⁻¹ ^ k) • f.signal k))
+        (nhds 1) (nhds L)
+      ↔
+      Filter.Tendsto
+        (fun z : ℂ =>
+          z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k))
+        (nhds 1) (nhds L) := by
+    constructor <;> intro h
+    · exact h.congr' h_rw2_eventually
+    · exact h.congr' h_rw2_eventually.symm
+
+  rw [propext h_tendsto_rw2]
+
+  have hcont :
+    Filter.Tendsto
+      (fun z : ℂ => ∑' k, (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k))
+      (nhds 1)
+      (nhds (∑' k, (f.signal (k + 1) - f.signal k))) := by
+    apply zTransform_difference_tendsto_one_of_bound
+    ·
+      exact Real.summable_exp_neg_nat
+    ·
+      intro k z hz
+      simp
+
+
+    exact zTransform_difference_tendsto_one_of_bound
+      (f := f.signal) u hu hbound
+  sorry
+
+
+
+
+
+
+
 end DiscreteLinearSystem
