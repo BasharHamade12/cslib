@@ -30,12 +30,10 @@ given an input sequence.
 the sequence `x` satisfies the linear difference equation `x(k+1) = A x(k) + B u(k)`.
 -/
 
-variable {σ : Type u} {ι : Type v}
-variable [TopologicalSpace σ] [NormedAddCommGroup σ] [NormedSpace ℂ σ]
-variable [TopologicalSpace ι] [NormedAddCommGroup ι] [NormedSpace ℂ ι]
+
 
 variable {σ : Type u} {ι : Type v}
-variable [TopologicalSpace σ] [NormedAddCommGroup σ] [NormedSpace ℂ σ]
+variable [NormedAddCommGroup σ] [NormedSpace ℂ σ]
 variable [TopologicalSpace ι] [NormedAddCommGroup ι] [NormedSpace ℂ ι]
 variable [Inhabited ι]
 
@@ -224,7 +222,7 @@ lemma zTransformSummable_delay {e : DiscreteSignal σ} {z : ℂ} (n : ℕ)
     simp only [le_add_iff_nonneg_left, zero_le, ↓reduceIte, add_tsub_cancel_right] at h_delay
     rw [h_eq] at h_delay
     by_cases hz : z = 0
-    · simp [hz]
+    · simp only [inv_pow]
       apply summable_of_ne_finset_zero (s := {0})
       intro k hk
       simp [Finset.mem_singleton] at hk
@@ -481,163 +479,388 @@ theorem final_value_theorem_limit_step {f : ℕ → σ} {L : σ} [ContinuousAdd 
     exact Filter.tendsto_add_atTop_nat 1
   exact tendsto_nhds_unique h_tendsto h_succ
 
+/-- Poles of (z-1)F(z) are inside the unit circle: formalized as the existence of
+    R > 1 such that ∑ ‖aₖ‖ · Rᵏ converges. This implies absolute and uniform
+    convergence of ∑ aₖ z⁻ᵏ on a neighborhood of z = 1. -/
+def PolesInsideUnitCircle (a : ℕ → σ) : Prop :=
+  ∃ R : ℝ, 1 < R ∧ Summable (fun k => ‖a k‖ * R ^ k)
 
-theorem zTransform_difference_tendsto_one_of_bound
-    {f : ℕ → σ}
-    [CompleteSpace σ]
-    [ContinuousConstSMul ℂ σ] [ContinuousSMul ℂ σ]
-    [IsTopologicalAddGroup σ] [T2Space σ]
-    (u : ℕ → ℝ)
-    (hu : Summable u)
-    (hbound : ∀ k z, z ∈ ({0}ᶜ : Set ℂ) →
-      ‖(z⁻¹ ^ k) • (f (k + 1) - f k)‖ ≤ u k) :
+
+theorem zTransform_continuousAt_one {a : ℕ → σ}
+    (hpoles : PolesInsideUnitCircle a)
+    [IsTopologicalAddGroup σ] [ContinuousConstSMul ℂ σ] [T2Space σ] [ContinuousSMul ℂ σ]  [ContinuousInv ℂ]
+    [CompleteSpace σ] :
     Filter.Tendsto
-      (fun z : ℂ => ∑' k, (z⁻¹ ^ k) • (f (k + 1) - f k))
+      (fun z : ℂ => ∑' k, (z⁻¹ ^ k) • a k)
       (nhds 1)
-      (nhds (∑' k, (f (k + 1) - f k))) := by
-  have hcontOn :
-      ContinuousOn
-        (fun z : ℂ => ∑' k, (z⁻¹ ^ k) • (f (k + 1) - f k))
-        ({0}ᶜ : Set ℂ) := by
-    apply continuousOn_tsum
-    · intro k
-      intro z hz
-      have hz' : z ≠ 0 := by simpa using hz
-      exact
-        ((ContinuousAt.inv₀ continuousAt_id hz').pow k).smul continuousAt_const
-          |>.continuousWithinAt
-    · exact hu
-    · intro k z hz
-      exact hbound k z hz
-
-  have h1 : (1 : ℂ) ∈ ({0}ᶜ : Set ℂ) := by
-    simp
-
-  have hcontAt :
-      ContinuousAt
-        (fun z : ℂ => ∑' k, (z⁻¹ ^ k) • (f (k + 1) - f k))
-        1 := by
-    exact (hcontOn 1 h1).continuousAt (by simpa using h1)
-
-  simpa [inv_one, one_pow, one_smul] using hcontAt.tendsto
-
-theorem final_value_theorem (f : SampledSignal σ) (L : σ)
-    (h_summable : ∀ z : ℂ, z ≠ 0 → Summable (fun k => (z⁻¹ ^ k) • f.signal k))
-    (h_summable_shift : ∀ z : ℂ, z ≠ 0 → Summable (fun k => (z⁻¹ ^ k) • f.signal (k + 1)))
-    [IsTopologicalAddGroup σ] [ContinuousConstSMul ℂ σ]
-    [ContinuousAdd σ] [T2Space σ] [ContinuousSMul ℂ σ] [ CompleteSpace σ] :
-    Filter.Tendsto f.signal atTop (nhds L) =
-    Filter.Tendsto (fun z : ℂ => (z - 1) • Z{f} z) (nhds 1) (nhds L) := by
-  simp only [zTransformSampled]
-  -- writing the step zTransform_mul_sub_one_split
-  have h_rw1 : ∀ z : ℂ, z ≠ 0 →
-      (z - 1) • (∑' k, (z⁻¹ ^ k) • f.signal k) =
-      (z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • f.signal (k + 1)) -
-        (∑' k, (z⁻¹ ^ k) • f.signal k) := by
+      (nhds (∑' k, a k)) := by
+  -- Extract R > 1 and the summability bound
+  obtain ⟨R, hR1, hRsum⟩ := hpoles
+  -- Pick r with 1 < r < R, and work on the closed ball B = Metric.closedBall 1 ε
+  -- where ε = 1 - 1/R, so that z ∈ B implies |z| ≥ 1/R, hence |z⁻¹| ≤ R
+  set ε := 1 - R⁻¹ with hε_def
+  have hR_pos : (0 : ℝ) < R := by linarith
+  have hRinv_lt_one : R⁻¹ < 1 := by
+    sorry -- since R > 1
+  have hε_pos : 0 < ε := by simp [hε_def]; linarith
+  -- Define the set S = Metric.closedBall 1 (ε/2) (an open neighborhood of 1 is enough)
+  -- Actually, let's use an open ball for continuity purposes
+  set S := Metric.ball (1 : ℂ) (ε / 2)
+  -- Key bound: for z ∈ S, ‖z⁻¹‖ ≤ R
+  have hz_bound : ∀ z ∈ S, ‖z⁻¹‖ ≤ R := by
     intro z hz
-    exact zTransform_mul_sub_one_split hz (h_summable z hz)
-
-  have h_ne : ∀ᶠ z : ℂ in nhds (1 : ℂ), z ≠ 0 := by
-    exact isClosed_singleton.isOpen_compl.mem_nhds (by simp)
-
-  have h_rw1_eventually :
-      (fun z : ℂ => (z - 1) • (∑' k, (z⁻¹ ^ k) • f.signal k))
-        =ᶠ[nhds (1 : ℂ)]
-      (fun z : ℂ =>
-        (z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • f.signal (k + 1)) -
-          (∑' k, (z⁻¹ ^ k) • f.signal k)) := by
-    filter_upwards [h_ne] with z hz
-    exact h_rw1 z hz
-
-  have h_tendsto_rw1 :
-      Filter.Tendsto (fun z : ℂ => (z - 1) • ∑' k, (z⁻¹ ^ k) • f.signal k) (nhds 1) (nhds L) ↔
-      Filter.Tendsto
-        (fun z : ℂ =>
-          (z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • f.signal (k + 1)) -
-            (∑' k, (z⁻¹ ^ k) • f.signal k))
-        (nhds 1) (nhds L) := by
-    constructor <;> intro h
-    · exact h.congr' h_rw1_eventually
-    · exact h.congr' h_rw1_eventually.symm
-
-  rw [propext h_tendsto_rw1]
-  have h_diff_limit : ∀ z : ℂ, z ≠ 0 →
-    Filter.Tendsto
-      (fun K => ∑ k ∈ Finset.range (K + 1), (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k))
-      Filter.atTop
-      (nhds (∑' k, (z⁻¹ ^ k) • f.signal (k + 1) - ∑' k, (z⁻¹ ^ k) • f.signal k)) := by
-    intro z hz
-    exact zTransform_difference_limit
-      (f := f.signal) (z := z)
-      (h_summable z hz)
-      (h_summable_shift z hz)
-
-  have h_diff_limit_add : ∀ z : ℂ, z ≠ 0 →
-    Filter.Tendsto
-      (fun K => z • f.signal 0 +
-        ∑ k ∈ Finset.range (K + 1), (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k))
-      Filter.atTop
-      (nhds (z • f.signal 0 +
-        (∑' k, (z⁻¹ ^ k) • f.signal (k + 1) - ∑' k, (z⁻¹ ^ k) • f.signal k))) := by
-    intro z hz
-    exact Filter.Tendsto.const_add (z • f.signal 0) (h_diff_limit z hz)
-
-  have h_rw2 : ∀ z : ℂ, z ≠ 0 →
-      (z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • f.signal (k + 1)) -
-        (∑' k, (z⁻¹ ^ k) • f.signal k)
-      =
-      z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k) := by
-    intro z hz
-    rw [add_sub_assoc]
-    rw [← Summable.tsum_sub (h_summable_shift z hz) (h_summable z hz)]
-    congr 1
+    simp only [Metric.mem_ball, S] at hz
+    -- |z - 1| < ε/2, so |z| > 1 - ε/2 = 1 - (1 - R⁻¹)/2 = (1 + R⁻¹)/2 > R⁻¹
+    -- Therefore |z⁻¹| < 1/R⁻¹ = R... but this needs care
+    sorry -- norm bound computation
+  -- Define summands as functions of z
+  let F : ℕ → ℂ → σ := fun k z => (z⁻¹ ^ k) • a k
+  -- Each F k is continuous (it's a power of z⁻¹ times a constant)
+  have hF_cont : ∀ k, ContinuousOn (F k) S := by
+    intro k
+    apply ContinuousOn.smul
+    · exact (continuous_inv.pow k).continuousOn
+    · exact continuousOn_const
+  -- Norm bound: for z ∈ S, ‖F k z‖ ≤ ‖a k‖ * R ^ k
+  have hF_bound : ∀ k, ∀ z ∈ S, ‖F k z‖ ≤ ‖a k‖ * R ^ k := by
+    intro k z hz
+    simp only [F, norm_smul, norm_pow]
+    nth_rewrite 2 [mul_comm]
+    apply mul_le_mul_of_nonneg_right
+    specialize hz_bound z hz
     sorry
 
-  have h_rw2_eventually :
-      (fun z : ℂ =>
-        (z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • f.signal (k + 1)) -
-          (∑' k, (z⁻¹ ^ k) • f.signal k))
-        =ᶠ[nhds (1 : ℂ)]
-      (fun z : ℂ =>
-        z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k)) := by
-    filter_upwards [h_ne] with z hz
-    exact h_rw2 z hz
+  -- Weierstrass M-test: the sum converges uniformly on S
+  have hUnif : HasSumUniformlyOn F (fun z => ∑' k, F k z) S :=
+    HasSumUniformlyOn.of_norm_le_summable hRsum hF_bound
+  -- Uniform convergence + continuous summands → continuous sum on S
+  have hContOn : ContinuousOn (fun z => ∑' k, F k z) S :=
+    hUnif.tendstoUniformlyOn.continuousOn
+      (Filter.Eventually.of_forall (fun n => hF_cont n))
+  -- S is a neighborhood of 1, so ContinuousOn gives ContinuousAt at 1
+  have h1S : (1 : ℂ) ∈ S := Metric.mem_ball_self (by linarith)
+  have hContAt := hContOn.continuousAt (Metric.isOpen_ball.mem_nhds h1S)
+  -- Rewrite the value at z = 1
+  have h_at_one : (fun z => ∑' k, F k z) 1 = ∑' k, a k := by
+    simp [F, inv_one, one_pow, one_smul]
+  rw [h_at_one] at hContAt
+  exact hContAt
+/-- If the poles of (z-1)F(z) are inside the unit circle, then the z-transform of
+    the difference signal f(k+1) - f(k) is continuous at z = 1. -/
+theorem difference_zTransform_continuousAt_one (f : SampledSignal σ)
+    (hpoles : PolesInsideUnitCircle (fun k => f.signal (k + 1) - f.signal k))
 
-  have h_tendsto_rw2 :
-      Filter.Tendsto
-        (fun z : ℂ =>
-          (z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • f.signal (k + 1)) -
-            (∑' k, (z⁻¹ ^ k) • f.signal k))
+    [IsTopologicalAddGroup σ] [ContinuousConstSMul ℂ σ] [T2Space σ]
+    [ContinuousSMul ℂ σ] [ContinuousInv ℂ] [CompleteSpace σ]:
+    Filter.Tendsto
+      (fun z : ℂ => ∑' k, (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k))
+      (nhds 1)
+      (nhds (∑' k, (f.signal (k + 1) - f.signal k)))
+      :=
+  zTransform_continuousAt_one hpoles
+
+theorem final_value_theorem (f : SampledSignal σ) (L : σ)
+    [IsTopologicalAddGroup σ] [ContinuousConstSMul ℂ σ]
+    [ContinuousAdd σ] [T2Space σ] [ContinuousSMul ℂ σ] [CompleteSpace σ]
+    [ContinuousInv ℂ]
+    (hpoles : PolesInsideUnitCircle (fun k => f.signal (k + 1) - f.signal k))
+    (hconv : ∀ z : ℂ, z ≠ 0 → Summable (fun k => (z⁻¹ ^ k) • f.signal k)) :
+    Filter.Tendsto f.signal atTop (nhds L) ↔
+    Filter.Tendsto (fun z : ℂ => (z - 1) • Z{f} z) (nhds 1) (nhds L) := by
+  simp only [zTransformSampled]
+
+  have h_step1 :
+      ∀ z : ℂ,
+        z ≠ 0 →
+        Summable (fun k => (z⁻¹ ^ k) • f.signal k) →
+        (z - 1) • (∑' k, (z⁻¹ ^ k) • f.signal k)
+          =
+        z • (∑' k, (z⁻¹ ^ k) • f.signal k) -
+          (∑' k, (z⁻¹ ^ k) • f.signal k) :=  by
+          intros z hz hsummable
+          rw [sub_smul]
+          simp
+
+
+  have h_step2 :
+      ∀ z : ℂ,
+        z ≠ 0 →
+        Summable (fun k => (z⁻¹ ^ k) • f.signal k) →
+        z • (∑' k, (z⁻¹ ^ k) • f.signal k)
+          =
+        z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • f.signal (k + 1) := by
+      intros z hz hsummable
+      rw [Summable.tsum_eq_zero_add]
+      simp
+      rw [<- tsum_const_smul'']
+      congr 1
+      ext k
+      rw [smul_smul]
+      congr 1
+
+      rw [pow_succ, mul_comm z]
+      simp
+      nth_rewrite 2 [mul_comm]
+      nth_rewrite 1 [mul_assoc]
+      have : (z⁻¹) * z = 1 := by field_simp
+      rw [this]
+      simp
+      exact hsummable
+
+
+
+
+
+  have h_step3 :
+      ∀ z : ℂ,
+        z ≠ 0 →
+        Summable (fun k => (z⁻¹ ^ k) • f.signal k) →
+        (z - 1) • (∑' k, (z⁻¹ ^ k) • f.signal k)
+          =
+        (z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • f.signal (k + 1)) -
+          (∑' k, (z⁻¹ ^ k) • f.signal k) := by
+      intros z hz hsummable
+      rw [sub_smul]
+      rw [h_step2 z hz hsummable]
+      congr 1
+      simp
+
+
+  have h_step4 :
+      ∀ z : ℂ,
+        z ≠ 0 →
+        Summable (fun k => (z⁻¹ ^ k) • f.signal k) →
+        Summable (fun k => (z⁻¹ ^ k) • f.signal (k + 1)) →
+        (z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • f.signal (k + 1)) -
+          (∑' k, (z⁻¹ ^ k) • f.signal k)
+          =
+        z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k) := by
+      intros z hz hsummable hsummable'
+
+
+      abel_nf
+      congr 1
+      have : ∑' (k : ℕ),
+      z⁻¹ ^ k • f.signal (k + 1) + -1 • ∑' (k : ℕ), z⁻¹ ^ k • f.signal k = ∑' (k : ℕ), z⁻¹ ^ k • f.signal (k + 1) -  ∑' (k : ℕ), z⁻¹ ^ k • f.signal k := by
+        abel
+
+      rw [this]
+      rw [← Summable.tsum_sub hsummable' hsummable]
+      congr 1
+      ext k
+      rw [<-smul_sub]
+      congr 1
+      simp
+      have : k+1 = 1+k := by
+        linarith
+      rw [this]
+      abel
+
+
+
+
+  have h_step5 :
+      (∀ z : ℂ, z ≠ 0 → Summable (fun k => (z⁻¹ ^ k) • f.signal k)) →
+      (∀ z : ℂ, z ≠ 0 → Summable (fun k => (z⁻¹ ^ k) • f.signal (k + 1))) →
+      (Filter.Tendsto
+        (fun z : ℂ => (z - 1) • ∑' k, (z⁻¹ ^ k) • f.signal k)
         (nhds 1) (nhds L)
       ↔
       Filter.Tendsto
         (fun z : ℂ =>
           z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k))
-        (nhds 1) (nhds L) := by
-    constructor <;> intro h
-    · exact h.congr' h_rw2_eventually
-    · exact h.congr' h_rw2_eventually.symm
+        (nhds 1) (nhds L)) := by
+    intro hsumm hsumm'  -- First introduce the two hypotheses
+    have h_eq : ∀ᶠ (z : ℂ) in nhds (1 : ℂ),
+      (z - 1) • ∑' k, (z⁻¹ ^ k) • f.signal k =
+      z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k) := by
+      filter_upwards [isOpen_ne.mem_nhds (one_ne_zero)] with z hz
+      rw [h_step3 z hz (hsumm z hz), h_step4 z hz (hsumm z hz) (hsumm' z hz)]
 
-  rw [propext h_tendsto_rw2]
-
-  have hcont :
-    Filter.Tendsto
-      (fun z : ℂ => ∑' k, (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k))
-      (nhds 1)
-      (nhds (∑' k, (f.signal (k + 1) - f.signal k))) := by
-    apply zTransform_difference_tendsto_one_of_bound
-    ·
-      exact Real.summable_exp_neg_nat
-    ·
-      intro k z hz
-      simp
+    constructor
+    · intro h
+      rwa [Filter.tendsto_congr' h_eq] at h
 
 
-    exact zTransform_difference_tendsto_one_of_bound
-      (f := f.signal) u hu hbound
-  sorry
+    · intro h
+      rwa [<-Filter.tendsto_congr' h_eq] at h
 
 
+
+
+
+  have h_step6 :
+      Filter.Tendsto
+        (fun z : ℂ =>
+          z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k))
+        (nhds 1)
+        (nhds (f.signal 0 + ∑' k, (f.signal (k + 1) - f.signal k))) := by
+    apply Filter.Tendsto.add
+    · -- z • f.signal 0 → 1 • f.signal 0 = f.signal 0 as z → 1
+      have h : Filter.Tendsto (fun z : ℂ => z • f.signal 0) (nhds 1)
+          (nhds ((1 : ℂ) • f.signal 0)) :=
+        Filter.Tendsto.smul tendsto_id tendsto_const_nhds
+      rwa [one_smul] at h
+    · -- Continuity of the tsum at z = 1, from the poles condition
+      exact difference_zTransform_continuousAt_one f hpoles
+
+  have h_step7 :
+      Filter.Tendsto
+        (fun K => ∑ k ∈ Finset.range (K + 1), (f.signal (k + 1) - f.signal k))
+        Filter.atTop
+        (nhds (∑' k, (f.signal (k + 1) - f.signal k))) := by
+    -- Extract R > 1 and summability bound from hpoles
+    obtain ⟨R, hR1, hRsum⟩ := hpoles
+    -- ‖aₖ‖ ≤ ‖aₖ‖ * R^k since R^k ≥ 1, so summability follows
+
+    have hdiff_summable : Summable (fun k => f.signal (k + 1) - f.signal k) := by
+      have h_bound : ∀ k, ‖f.signal (k + 1) - f.signal k‖ ≤
+          ‖f.signal (k + 1) - f.signal k‖ * R ^ k := by
+        intro k
+        have hRk : (1 : ℝ) ≤ R ^ k := by
+          induction k with
+          | zero => simp
+          | succ n ih =>
+            calc (1 : ℝ) ≤ 1 * R := by linarith
+              _ ≤ R ^ n * R := by nlinarith
+              _ = R ^ (n + 1) := (pow_succ R n).symm
+        nlinarith [norm_nonneg (f.signal (k + 1) - f.signal k)]
+      have h_summ : Summable (fun k => ‖f.signal (k + 1) - f.signal k‖ * R ^ k) := by
+        convert hRsum using  1
+      convert Summable.of_norm_bounded h_summ h_bound
+
+    simpa [Function.comp] using
+      hdiff_summable.tendsto_sum_tsum_nat.comp (Filter.tendsto_add_atTop_nat 1)
+
+
+  have h_step8 :
+      ∀ K : ℕ,
+        f.signal 0 + ∑ k ∈ Finset.range (K + 1), (f.signal (k + 1) - f.signal k)
+          =
+        f.signal (K + 1) := by
+      intro K
+      have telescoping_sum_finite : ∑ k ∈ Finset.range (K + 1),
+      (f.signal (k + 1) - f.signal k) = f.signal (K + 1) - f.signal 0 := by
+        induction K with
+        | zero =>
+          simp [Finset.range_one]
+        | succ K ih =>
+          rw [Finset.sum_range_succ, ih]
+          abel
+      rw [telescoping_sum_finite]
+      abel
+
+
+
+
+
+
+  have h_step9 :
+      Filter.Tendsto
+        (fun K => f.signal (K + 1))
+        Filter.atTop
+        (nhds (f.signal 0 + ∑' k, (f.signal (k + 1) - f.signal k))) := by
+    have h_eq : (fun K => f.signal (K + 1)) =
+        (fun K => f.signal 0 + ∑ k ∈ Finset.range (K + 1), (f.signal (k + 1) - f.signal k)) := by
+      ext K
+      exact (h_step8 K).symm
+    rw [h_eq]
+    exact Filter.Tendsto.const_add (f.signal 0) h_step7
+
+  have h_step10 :
+      ∀ L' : σ,
+        Filter.Tendsto f.signal atTop (nhds L') →
+        Filter.Tendsto (fun K => f.signal (K + 1)) atTop (nhds L') := by
+    intro L' hlim
+    exact hlim.comp (Filter.tendsto_add_atTop_nat 1)
+
+  have h_step11 :
+      Filter.Tendsto f.signal atTop (nhds L) →
+      f.signal 0 + ∑' k, (f.signal (k + 1) - f.signal k) = L := by
+    intro hlim
+    have hshift := h_step10 L hlim
+    exact tendsto_nhds_unique h_step9 hshift
+
+  have h_step12 :
+      Filter.Tendsto
+        (fun z : ℂ =>
+          z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k))
+        (nhds 1) (nhds L)
+      ↔
+      f.signal 0 + ∑' k, (f.signal (k + 1) - f.signal k) = L := by
+    constructor
+    · intro h
+      exact tendsto_nhds_unique h_step6 h
+    · intro h
+      rw [← h]
+      exact h_step6
+
+  constructor
+  · -- Forward: f.signal → L  ⟹  (z-1)·F(z) → L
+    intro hlim
+    -- Step 1: get the algebraic equality from convergence of f
+    have h_eqL : f.signal 0 + ∑' k, (f.signal (k + 1) - f.signal k) = L :=
+      h_step11 hlim
+    -- Step 2: the middle expression tends to L  (by h_step12)
+    have h_mid : Filter.Tendsto
+        (fun z : ℂ => z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k))
+        (nhds 1) (nhds L) :=
+      h_step12.mpr h_eqL
+    -- Step 3: Need summability to use h_step5
+    have hsumm : ∀ z : ℂ, z ≠ 0 → Summable (fun k => (z⁻¹ ^ k) • f.signal k) := hconv
+    have hsumm' : ∀ z : ℂ, z ≠ 0 → Summable (fun k => (z⁻¹ ^ k) • f.signal (k + 1)) := by
+      intro z hz
+      have h := hconv z hz
+      -- From Summable (k ↦ z⁻¹^k • f k), get Summable (k ↦ z⁻¹^(k+1) • f (k+1))
+      rw [<-summable_nat_add_iff 1] at h
+      -- Rewrite z⁻¹^(k+1) = z⁻¹ * z⁻¹^k, so we have Summable (k ↦ z⁻¹ • (z⁻¹^k • f (k+1)))
+      simp_rw [pow_succ', mul_smul] at h
+      -- Multiply by z to cancel the z⁻¹: z • z⁻¹ • x = x
+      have h2 := h.const_smul z
+      convert h2 using 1
+      ext k
+      abel_nf
+      -- nth_rewrite 1 [mul_assoc]
+      rw [smul_smul, smul_smul, mul_inv_cancel₀ hz]
+      simp only [inv_pow, one_mul]
+
+    -- Step 4: Convert back to (z-1)F(z) form
+    exact (h_step5 hsumm hsumm').mpr h_mid
+
+  · -- Backward: (z-1)·F(z) → L  ⟹  f.signal → L
+      intro hlim
+      -- Step 0: Need summability to use h_step5
+      have hsumm : ∀ z : ℂ, z ≠ 0 → Summable (fun k => (z⁻¹ ^ k) • f.signal k) := hconv
+      have hsumm' : ∀ z : ℂ, z ≠ 0 → Summable (fun k => (z⁻¹ ^ k) • f.signal (k + 1)) := by
+        intro z hz
+        have h := hconv z hz
+        -- From Summable (k ↦ z⁻¹^k • f k), get Summable (k ↦ z⁻¹^(k+1) • f (k+1))
+        rw [<-summable_nat_add_iff 1] at h
+        -- Rewrite z⁻¹^(k+1) = z⁻¹ * z⁻¹^k, so we have Summable (k ↦ z⁻¹ • (z⁻¹^k • f (k+1)))
+        simp_rw [pow_succ', mul_smul] at h
+        -- Multiply by z to cancel the z⁻¹: z • z⁻¹ • x = x
+        have h2 := h.const_smul z
+        convert h2 using 1
+        ext k
+        abel_nf
+        -- nth_rewrite 1 [mul_assoc]
+        rw [smul_smul, smul_smul, mul_inv_cancel₀ hz]
+        simp only [inv_pow, one_mul]
+      -- Step 1: Convert hlim from (z-1)F(z) form to z·f₀ + ∑... form using h_step5
+      have h_mid : Filter.Tendsto
+          (fun z : ℂ => z • f.signal 0 + ∑' k, (z⁻¹ ^ k) • (f.signal (k + 1) - f.signal k))
+          (nhds 1) (nhds L) :=
+        (h_step5 hsumm hsumm').mp hlim
+      -- Step 2: by uniqueness of limits
+      have h_eq_lim : f.signal 0 + ∑' k, (f.signal (k + 1) - f.signal k) = L :=
+        tendsto_nhds_unique h_step6 h_mid
+      -- Step 3: f(K+1) → f.signal 0 + ∑' k, ...  (by h_step9)
+      --         and that equals L
+      have h_shift : Filter.Tendsto (fun K => f.signal (K + 1)) Filter.atTop (nhds L) := by
+        rw [← h_eq_lim]
+        exact h_step9
+      -- Step 4: f(K+1) → L implies f → L  (shift the index back)
+      rwa [Filter.tendsto_add_atTop_iff_nat 1] at h_shift
 
 
 
