@@ -501,7 +501,7 @@ theorem zTransform_continuousAt_one {a : ℕ → σ}
   set ε := 1 - R⁻¹ with hε_def
   have hR_pos : (0 : ℝ) < R := by linarith
   have hRinv_lt_one : R⁻¹ < 1 := by
-    sorry -- since R > 1
+    exact inv_lt_one_of_one_lt₀ hR1
   have hε_pos : 0 < ε := by simp [hε_def]; linarith
   -- Define the set S = Metric.closedBall 1 (ε/2) (an open neighborhood of 1 is enough)
   -- Actually, let's use an open ball for continuity purposes
@@ -512,7 +512,20 @@ theorem zTransform_continuousAt_one {a : ℕ → σ}
     simp only [Metric.mem_ball, S] at hz
     -- |z - 1| < ε/2, so |z| > 1 - ε/2 = 1 - (1 - R⁻¹)/2 = (1 + R⁻¹)/2 > R⁻¹
     -- Therefore |z⁻¹| < 1/R⁻¹ = R... but this needs care
-    sorry -- norm bound computation
+    rw [norm_inv]
+
+    have h_dist : ‖z - 1‖ < ε / 2 := by rwa [Complex.dist_eq] at hz
+    have h_Rinv_pos : (0 : ℝ) < R⁻¹ := inv_pos.mpr hR_pos
+    have h_norm_lower : R⁻¹ < ‖z‖ := by
+      have h_tri := norm_sub_norm_le (1 : ℂ) z
+      rw [norm_one, norm_sub_rev] at h_tri
+      linarith
+    have h_inv : ‖z‖⁻¹ < (R⁻¹)⁻¹ := by
+     -- inv_lt_inv_of_lt h_Rinv_pos h_norm_lower
+     exact inv_strictAnti₀ h_Rinv_pos h_norm_lower
+    rw [inv_inv] at h_inv
+    linarith
+
   -- Define summands as functions of z
   let F : ℕ → ℂ → σ := fun k z => (z⁻¹ ^ k) • a k
   -- Each F k is continuous (it's a power of z⁻¹ times a constant)
@@ -528,23 +541,35 @@ theorem zTransform_continuousAt_one {a : ℕ → σ}
     nth_rewrite 2 [mul_comm]
     apply mul_le_mul_of_nonneg_right
     specialize hz_bound z hz
-    sorry
+    · refine pow_le_pow_left₀ ?_ hz_bound k
+      simp
 
-  -- Weierstrass M-test: the sum converges uniformly on S
+
+    · simp
+
+
+
   have hUnif : HasSumUniformlyOn F (fun z => ∑' k, F k z) S :=
     HasSumUniformlyOn.of_norm_le_summable hRsum hF_bound
-  -- Uniform convergence + continuous summands → continuous sum on S
-  have hContOn : ContinuousOn (fun z => ∑' k, F k z) S :=
-    hUnif.tendstoUniformlyOn.continuousOn
-      (Filter.Eventually.of_forall (fun n => hF_cont n))
-  -- S is a neighborhood of 1, so ContinuousOn gives ContinuousAt at 1
-  have h1S : (1 : ℂ) ∈ S := Metric.mem_ball_self (by linarith)
-  have hContAt := hContOn.continuousAt (Metric.isOpen_ball.mem_nhds h1S)
-  -- Rewrite the value at z = 1
+
+  have hContOn : ContinuousOn (fun z => ∑' k, F k z) S := by
+      apply hUnif.tendstoUniformlyOn.continuousOn
+      exact Filter.Frequently.of_forall
+        fun s => continuousOn_finset_sum s fun k _ => hF_cont k
+
   have h_at_one : (fun z => ∑' k, F k z) 1 = ∑' k, a k := by
     simp [F, inv_one, one_pow, one_smul]
-  rw [h_at_one] at hContAt
+
+  have h1S : (1 : ℂ) ∈ S := Metric.mem_ball_self (by linarith)
+  have hContAt := ContinuousOn.continuousAt hContOn (Metric.isOpen_ball.mem_nhds h1S)
+  have h_at_one : (fun z => ∑' k, F k z) 1 = ∑' k, a k := by
+    simp [F, inv_one, one_pow, one_smul]
+  simp only [ContinuousAt, F] at hContAt
+  simp only [inv_one, one_pow, one_smul] at hContAt
   exact hContAt
+
+
+
 /-- If the poles of (z-1)F(z) are inside the unit circle, then the z-transform of
     the difference signal f(k+1) - f(k) is continuous at z = 1. -/
 theorem difference_zTransform_continuousAt_one (f : SampledSignal σ)
