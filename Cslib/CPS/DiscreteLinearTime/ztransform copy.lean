@@ -255,6 +255,8 @@ lemma zTransformSummable_delay {e : DiscreteSignal σ} {z : ℂ} (n : ℕ)
       intro k hk
       simp [Finset.mem_singleton] at hk
       simp [hk]
+      left
+      exact hz
     · have h_smul := h_delay.const_smul (z ^ n)
       simp only [smul_smul] at h_smul
       convert h_smul using 1
